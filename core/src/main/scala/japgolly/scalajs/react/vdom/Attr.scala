@@ -12,19 +12,19 @@ import Attr.ValueType
 /**
   * @tparam U Underlying type of the value required by this attribute.
   */
-abstract class Attr[-U](final val name: String) {
-  override final def toString = s"VdomAttr{name=$name}"
+abstract class Attr[-U](final val attrName: String) {
+  override final def toString = s"VdomAttr{name=$attrName}"
 
-  override def hashCode = name.##
+  override def hashCode = attrName.##
   override def equals(any: Any) = any match {
-    case that: Attr[_] => this.name == that.name
+    case that: Attr[_] => this.attrName == that.attrName
     case _                  => false
   }
 
   def :=[A](a: A)(implicit t: ValueType[A, U]): TagMod
 
   final def :=?[O[_], A](oa: O[A])(implicit O: OptionLike[O], t: ValueType[A, U]): TagMod =
-    O.fold(oa, TagMod.Empty)(:=(_))
+    O.fold(oa, TagMod.empty)(:=(_))
 }
 
 @implicitNotFound("You are passing a CallbackTo[${A}] to a DOM event handler which is most likely a mistake."
@@ -51,9 +51,9 @@ object Attr {
     else
       Dud
 
-  class Generic[-U](name: String) extends Attr[U](name) {
+  class Generic[-U](attrName: String) extends Attr[U](attrName) {
     override def :=[A](a: A)(implicit t: ValueType[A, U]): TagMod =
-      t(name, a)
+      t(attrName, a)
   }
 
   final class Event[E[+x <: dom.Node] <: raw.SyntheticEvent[x]](name: String)
@@ -87,6 +87,7 @@ object Attr {
     @inline def focus      (name: String) = apply[raw.SyntheticFocusEvent      ](name)
     @inline def keyboard   (name: String) = apply[raw.SyntheticKeyboardEvent   ](name)
     @inline def mouse      (name: String) = apply[raw.SyntheticMouseEvent      ](name)
+    @inline def pointer    (name: String) = apply[raw.SyntheticPointerEvent    ](name)
     @inline def touch      (name: String) = apply[raw.SyntheticTouchEvent      ](name)
     @inline def transition (name: String) = apply[raw.SyntheticTransitionEvent ](name)
     @inline def ui         (name: String) = apply[raw.SyntheticUIEvent         ](name)
@@ -94,7 +95,7 @@ object Attr {
   }
 
   private[vdom] object Dud extends Attr[Any]("") {
-    override def :=[A](a: A)(implicit t: ValueType[A, Any]) = TagMod.Empty
+    override def :=[A](a: A)(implicit t: ValueType[A, Any]) = TagMod.empty
   }
 
   private[vdom] object ClassName extends Attr[String]("class") {
@@ -108,15 +109,16 @@ object Attr {
   }
 
   sealed trait Key
-  val Key = apply[Key]("key")
+  private[vdom] object Key extends Attr[Key]("key") {
+    override def :=[A](a: A)(implicit t: ValueType[A, Key]): TagMod =
+      TagMod.fn(b => t.fn(b.setKey, a))
+  }
 
-  object Ref extends Attr[raw.RefFn]("ref") {
-    override def :=[A](a: A)(implicit t: ValueType[A, raw.RefFn]) =
-      t(name, a)
-    private[vdom] def tag[N <: TopNode](f: N => Unit): TagMod =
-      :=(f: js.Function1[N, Unit])(ValueType.direct)
-    def apply(f: js.Any => Unit): TagMod =
-      :=(f: js.Function1[js.Any, Unit])(ValueType.direct)
+  object Ref extends Attr[raw.React.RefFn[_ <: TopNode]]("ref") {
+    override def :=[A](a: A)(implicit t: ValueType[A, raw.React.RefFn[_ <: TopNode]]) =
+      t(attrName, a)
+    private[vdom] def apply[N <: TopNode](r: japgolly.scalajs.react.Ref.Set[N]): TagMod =
+      :=(r.rawSetFn)(ValueType.direct)
   }
 
 //  implicit val ordering: Ordering[ReactAttr[Nothing]] =

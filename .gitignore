@@ -10,4 +10,5 @@ target
 .*.swp
 .*.swo
 .*.swn
-
+.bloop
+.metals

@@ -3,7 +3,7 @@ Callback
 
 The `Callback` class encapsulates logic and side-effects that are meant to be *executable by React*, when/if React chooses to execute it. Examples are React responding to the user clicking a button, or React unmounting a component.
 
-There's also a this blog post with a great introduction to typed side-effects:
+There's also this blog post with a great introduction to typed side-effects:
 http://typelevel.org/blog/2017/05/02/io-monad-for-cats.html
 
 **WARNING**: *If you're new to scalajs-react and typed effects (or just functional programming in general), then it's important you read this because if you incorrectly mix this with imperative-style code that performs side-effects, you'll likely have runtime bugs where data goes stale and/or changes go undetected.*
@@ -25,7 +25,7 @@ Introduction
 
 A callback is a procedure that is:
 * Executable by React when/if it chooses (usually an event handler or React lifecycle method.
-* Executed asychronously by React.
+* Executed asynchronously by React.
 * Repeatable. It can be run more than once.
 * Pure (does nothing) when you create an instance. If you create a `Callback` but never run it, no action or effects should occur.
 
@@ -92,7 +92,7 @@ Utilities once you have a `Callback`
 
 `Callback` instances come with a bunch of useful utility methods:
 * `.attempt` to catch any error in the callback and handle it.
-* `.async`/`.delay(n)` to run asynchronously and return a `Future`.
+* `.async`/`.delay(n)` to run asynchronously.
 * `.logResult` to print the callback result before returning it.
 * `.logDuration` to measure and log how long the callback takes.
 * `.map` (as you would expect) to transform the result.
@@ -107,7 +107,7 @@ When you want to compose multiple `Callback` instances, there are many ways depe
 * *(Most-common)* `.flatMap` and/or for-comprehensions. Same as using Scala's `Future`.
 * *(Most-common)* `>>`. This operator composes callbacks sequentially. i.e. `a >> b >> c` will create a new callback which will execute `a` first, then `b` second, and finally `c` third.
 * If you want to compose more than two callbacks, or don't know how many you'll have at runtime, there is `Callback.sequence` and `Callback.traverse`.
-* Monadic and applicative ops that'd you'd expect coming from languages like Haskell are there (`*>`, `<*`, `>>`, `<<`, `>>=`, etc). They're baked in rather than typeclass-provided.
+* Monadic and applicative ops that you'd expect coming from languages like Haskell are there (`*>`, `<*`, `>>`, `<<`, `>>=`, etc). They're baked in rather than typeclass-provided.
 
 The `>>` operator deserves a special mention as it's commonly useful.
 It's used to fuse two callbacks together sequentially.
@@ -180,7 +180,7 @@ x.runNow()
 Working with `Callback`/`CallbackTo` might seem odd if you're not used to capturing effects with monads, but it's a transferable skill with applications outside of `Callback` itself.
 
 If you'd like to learn more about this approach, see *How to declare an imperative* by Philip Wadler.
-<br>A summary is available here: https://www.dcc.fc.up.pt/~pbv/aulas/tapf/slides/imperative.html
+<br>A summary is available here: http://www.dcc.fc.up.pt/~pbv/aulas/tapf/handouts/imperative.html
 
 A direct example of how *this* connects to *that*, is the **Equational reasoning** example.
 <br>Say we have a callback that prints "ha" twice to display "haha".
@@ -233,10 +233,8 @@ Manual Execution
 As is stressed above, `Callback`s are meant to be executed by React at a time and frequency of its choosing.
 
 There are scenarios in which you may want to execute a callback manually:
-* Working with an external service.
-  * In an AJAX callback.
-  * In a websocket callback.
-* In a unit test.
+* Working with an external service (eg. a websocket callback)
+* In a unit test
 
 There are two ways to go about this:
 
@@ -315,43 +313,33 @@ Common Mistakes
   then wrap the construction in `Callback.byName` and continue to pass around `Callback` instead of `() => Callback`.
 
 
-  Callbacks and Futures
-  =====================
+Callbacks and Futures
+=====================
 
-  There are a number of conversions available to convert between `Callback` and `Future`.
+When working with Scala `Future`s (or JS `Promise`s), `AsyncCallback` should be used.
 
-  | Input                      | Method                 | Output                  |
-  | -------------------------- | ---------------------- | ----------------------- |
-  | `CallbackTo[A]`            | `cb.toFuture`          | `Future[A]`             |
-  | `CallbackTo[Future[A]]`    | `cb.toFlatFuture`      | `Future[A]`             |
-  | `=> Future[A]`             | `CallbackTo(f)`        | `CallbackTo[Future[A]]` |
-  | `=> Future[CallbackTo[A]]` | `CallbackTo.future(f)` | `CallbackTo[Future[A]]` |
-  | `=> Future[CallbackTo[A]]` | `Callback.future(f)`   | `Callback`              |
+There are a number of conversions available to convert between `Callback` and `Future`.
 
-  If you're looking for ways to block (eg. turning a `Callback[Future[A]]` into a `Callback[A]`),
-  it is not supported by Scala.JS (See [#1996](https://github.com/scala-js/scala-js/issues/1996)).
+| Input                      | Method                 | Output                  |
+| -------------------------- | ---------------------- | ----------------------- |
+| `=> Future[A]`             | `AsyncCallback.fromFuture(f)`        | `AsyncCallback[A]` |
+| `AsyncCallback[A]`            | `cb.unsafeToFuture()`          | `Future[A]`             |
+| `CallbackTo[A]`            | `cb.asAsyncCallback`          | `AsyncCallback[A]`             |
 
-  **NOTE:** It's important that when going from `Future` to `Callback`, you're aware of when the `Future` is instantiated.
+If you're looking for ways to block (eg. turning a `Future[A]` or `AsyncCallback[A]` into a `Callback[A]`),
+it is not supported by Scala.JS (See [#1996](https://github.com/scala-js/scala-js/issues/1996)).
 
-  ```scala
-  def queryServer: Future[Data] = ???
+**NOTE:** It's important that when going from `Future` to `AsyncCallback`, you're aware of when the `Future` is instantiated. You should capture the initiation of the `Future`, not just the resulting value.
 
-  def updateComponent: Future[Callback] =
-    queryServer.map($ setState _)
+```scala
+def queryServer: Future[Data] = ???
 
-  // This is GOOD because the callback wraps the updateComponent *function*, not an instance.
-  Callback.future(updateComponent)
+// This is GOOD because the callback wraps the queryServer *function*, not an instance.
+AsyncCallback.fromFuture(queryServer)
 
-  // This is BAD because the callback wraps a single instance of updateComponent.
-  // 1) The server will be contacted immediately instead of when the callback executes.
-  // 2) If the callback is executed more than once, the future and old result will be reused.
-  val f = updateComponent
-  Callback.future(f)
-
-  // This is GOOD too because the future is created inside the callback.
-  Callback.future {
-    val f = updateComponent
-    f.onComplete(???)
-    f
-  }
-  ```
+// This is BAD because the callback wraps a single instance of queryServer.
+// 1) The server will be contacted immediately instead of when the callback executes.
+// 2) If the callback is executed more than once, the future and old result will be reused.
+val f = queryServer
+AsyncCallback.fromFuture(f)
+```

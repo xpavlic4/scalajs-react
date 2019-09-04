@@ -2,8 +2,10 @@ package ghpages.examples
 
 import ghpages.GhPagesMacros
 import ghpages.examples.util.SingleSide
-import japgolly.scalajs.react._, vdom.html_<^._, MonocleReact._
+import japgolly.scalajs.react._, vdom.html_<^._
+import japgolly.scalajs.react.MonocleReact._
 import japgolly.scalajs.react.extra.StateSnapshot
+
 
 object StateSnapshotExample {
 
@@ -23,7 +25,6 @@ object StateSnapshotExample {
         ^.value     := stateSnapshot.value,
         ^.onChange ==> ((e: ReactEventFromInput) => stateSnapshot.setState(e.target.value)))
     }
-    .configure(extra.LogLifecycle.default)
     .build
 
   val Main = ScalaComponent.builder[Unit]("StateSnapshot example")
@@ -37,7 +38,6 @@ object StateSnapshotExample {
         <.label("Surname:",    NameChanger(surnameV  )),
         <.p(s"My name is ${name.surname}, ${name.firstName} ${name.surname}."))
     }
-    .configure(extra.LogLifecycle.default)
     .build
 
   // EXAMPLE:END

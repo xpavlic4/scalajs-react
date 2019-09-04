@@ -23,7 +23,7 @@ Setup
 
   ```scala
   // core = essentials only. No bells or whistles.
-  libraryDependencies += "com.github.japgolly.scalajs-react" %%% "core" % "1.0.1"
+  libraryDependencies += "com.github.japgolly.scalajs-react" %%% "core" % "1.4.2"
   ```
 
 3. Add React to your build.
@@ -38,11 +38,11 @@ Setup
 
       enablePlugins(ScalaJSBundlerPlugin)
 
-      libraryDependencies += "com.github.japgolly.scalajs-react" %%% "core" % "1.0.1"
+      libraryDependencies += "com.github.japgolly.scalajs-react" %%% "core" % "1.4.2"
 
       npmDependencies in Compile ++= Seq(
-        "react" -> "15.5.4",
-        "react-dom" -> "15.5.4")
+        "react" -> "16.7.0",
+        "react-dom" -> "16.7.0")
     ```
 
     If you're using old-school `jsDependencies`, add something akin to:
@@ -51,23 +51,29 @@ Setup
     // React JS itself (Note the filenames, adjust as needed, eg. to remove addons.)
     jsDependencies ++= Seq(
 
-      "org.webjars.bower" % "react" % "15.5.4"
-        /        "react-with-addons.js"
-        minified "react-with-addons.min.js"
+      "org.webjars.npm" % "react" % "16.7.0"
+        /        "umd/react.development.js"
+        minified "umd/react.production.min.js"
         commonJSName "React",
 
-      "org.webjars.bower" % "react" % "15.5.4"
-        /         "react-dom.js"
-        minified  "react-dom.min.js"
-        dependsOn "react-with-addons.js"
+      "org.webjars.npm" % "react-dom" % "16.7.0"
+        /         "umd/react-dom.development.js"
+        minified  "umd/react-dom.production.min.js"
+        dependsOn "umd/react.development.js"
         commonJSName "ReactDOM",
 
-      "org.webjars.bower" % "react" % "15.5.4"
-        /         "react-dom-server.js"
-        minified  "react-dom-server.min.js"
-        dependsOn "react-dom.js"
-        commonJSName "ReactDOMServer")
+      "org.webjars.npm" % "react-dom" % "16.7.0"
+        /         "umd/react-dom-server.browser.development.js"
+        minified  "umd/react-dom-server.browser.production.min.js"
+        dependsOn "umd/react-dom.development.js"
+        commonJSName "ReactDOMServer"),
     ```
+
+If you see the error related to `js-tokens` (such as `org.webjars.npm#js-tokens;[3.0.0,4),[4.0.0,5): not found`), then add the following line to `build.sbt`:
+
+```
+dependencyOverrides += "org.webjars.npm" % "js-tokens" % "3.0.2"
+```
 
 [See here](IDE.md) for tips on configuring your IDE.
 
@@ -113,7 +119,7 @@ You throw types and functions at it, call `build` and when it compiles you will 
   Use your IDE to see the methods and the differences in their type signatures.
 
 3. *(Optional)* If you want a backend (explained below) for your component
-  (and you do for non-trivial compnents), call `.backend`.
+  (and you do for non-trivial components), call `.backend`.
   If your backend has a `.render` function, instead of `.backend` here you can call `.renderBackend`
   which will use a macro to instantiate your backend, and automatically choose the
   appropriate `.render` function in the next step, bypassing it for you.
@@ -273,7 +279,12 @@ NoArgs().renderIntoDOM(document.body)
 React Extensions
 ================
 
-* Where `setState(State)` is applicable, you can also run `modState(State => State)`.
+* Where `setState(State)` is applicable, you can also run:
+  * `modState(State => State)`
+  * `modState((State, Props) => State)`
+  * `setStateOption(Option[State])`
+  * `modStateOption(State => Option[State])`
+  * `modStateOption((State, Props) => Option[State])`
 
 * React has a [classSet addon](https://facebook.github.io/react/docs/class-name-manipulation.html)
   for specifying multiple optional class attributes. The same mechanism is applicable with this library is as follows:
@@ -296,7 +307,7 @@ React Extensions
     props.message)
   ```
 
-* Sometimes you want to allow a function to both get and affect a portion of a component's state. Anywhere that you can call `.setState()` you can also call `zoom()` to return an object that has the same `.setState()`, `.modState()` methods but only operates on a subset of the total state.
+* Sometimes you want to allow a function to both get and affect a portion of a component's state. Anywhere that you can call `.setState()` you can also call `.zoomState()` to return an object that has the same `.setState()`, `.modState()` methods but only operates on a subset of the total state.
 
   ```scala
   def incrementCounter(s: StateAccessPure[Int]): Callback =
@@ -306,7 +317,7 @@ React Extensions
   case class State(name: String, counter: Int)
 
   def render = {
-    val f = $.zoom(_.counter)((a,b) => a.copy(counter = b))
+    val f = $.zoomState(_.counter)(value => _.copy(counter = value))
     button(onclick --> incrementCounter(f), "+")
   }
   ```
@@ -326,13 +337,40 @@ React Extensions
   }
   ```
 
+* The `.getDOMNode` callback can sometimes execute when unmounted which is an increasingly annoying bug to track down.
+  Since React 16 with its new burn-it-all-down error handling approach, an occurance of this can be fatal.
+  In order to properly model the reality of the callback and ensure compile-time safety,
+  rather than just getting back a VDOM reference, the return type is an ADT like this:
+
+  ```
+                                   ComponentDom
+                                    ↑        ↑
+                 ComponentDom.Mounted        ComponentDom.Unmounted
+                  ↑            ↑
+  ComponentDom.Element      ComponentDom.Text
+  ```
+
+  Calling `.getDOMNode` from without lifecycle callbacks, returns a `ComponentDom.Mounted`.
+  Calling `.getDOMNode` on a mounted component instance or a `BackendScope` now returns `ComponentDom`
+  which may or may not be mounted.
+  Jump into the `ComponentDom` source to see the available methods but in most cases you'll use one of the following:
+
+  ```scala
+  trait ComponentDom {
+    def mounted  : Option[ComponentDom.Mounted]
+    def toElement: Option[dom.Element]
+    def toText   : Option[dom.Text]
+  ```
+
+  In unit tests you'll typically use `asMounted().asElement()` or `asMounted().asText()` for inspection.
+
 
 Gotchas
 =======
 
 * `table(tr(...))` will appear to work fine at first then crash later. React needs `table(tbody(tr(...)))`.
 
-* React's `setState` is asynchronous; it doesn't apply invocations of `this.setState` until the end of `render` or the current callback. Calling `.state` after `.setState` will return the initial, original value, i.e.
+* React's `setState` functions are asynchronous; they don't apply invocations of `this.setState` until the end of `render` or the current callback. Calling `.state` after `.setState` will return the initial, original value, i.e.
 
   ```scala
   val s1 = $.state

@@ -17,14 +17,17 @@ object Router {
 
   def componentUnbuiltC[Page](baseUrl: BaseUrl, cfg: RouterConfig[Page], lgc: RouterLogic[Page]) =
     ScalaComponent.builder[Unit]("Router")
-      .initialStateCallback(     lgc.syncToWindowUrl)
-      .backend             (_ => new OnUnmount.Backend)
-      .render_S            (     lgc.render)
-      .componentDidMount   ($ => cfg.postRenderFn(None, $.state.page))
-      .componentDidUpdate  (i => cfg.postRenderFn(Some(i.prevState.page), i.currentState.page))
-      .configure(
-        EventListener.install("popstate", _ => lgc.ctl.refresh, _ => dom.window),
-        Listenable.listenToUnit(_ => lgc, $ => lgc.syncToWindowUrl.flatMap($.setState(_))))
+      .initialStateCallback   (lgc.syncToWindowUrl)
+      .backend                (_ => new OnUnmount.Backend)
+      .render_S               (lgc.render)
+      .componentDidMount      ($ => cfg.postRenderFn(None, $.state.page))
+      .componentDidUpdate     (i => cfg.postRenderFn(Some(i.prevState.page), i.currentState.page))
+      .configure              (Listenable.listenToUnit(_ => lgc, $ => lgc.syncToWindowUrl.flatMap($.setState(_))))
+      .configure              (EventListener.install("popstate", _ => lgc.ctl.refresh, _ => dom.window))
+      .configureWhen(isIE11())(EventListener.install("hashchange", _ => lgc.ctl.refresh, _ => dom.window))
+
+  private def isIE11(): Boolean =
+    dom.window.navigator.userAgent.indexOf("Trident") != -1
 
   def componentAndLogic[Page](baseUrl: BaseUrl, cfg: RouterConfig[Page]): (Router[Page], RouterLogic[Page]) = {
     val l = new RouterLogic(baseUrl, cfg)
@@ -101,9 +104,13 @@ final class RouterLogic[Page](val baseUrl: BaseUrl, cfg: RouterConfig[Page]) ext
     log(s"Parsed $path to $parsed.") >> cmd
   }
 
-  def redirectCmd(p: Path, m: Redirect.Method): RouteCmd[Unit] = m match {
-    case Redirect.Push    => PushState   (p.abs)
-    case Redirect.Replace => ReplaceState(p.abs)
+  def redirectCmd(p: Path, m: Redirect.Method): RouteCmd[Unit] = {
+    val url = p.abs
+    m match {
+      case Redirect.Push    => PushState        (url)
+      case Redirect.Replace => ReplaceState     (url)
+      case Redirect.Force   => SetWindowLocation(url)
+    }
   }
 
   def resolve(page: Page, action: Action): RouteCmd[Resolution] =
@@ -131,12 +138,27 @@ final class RouterLogic[Page](val baseUrl: BaseUrl, cfg: RouterConfig[Page]) ext
     @inline def ht = ""
     @inline def h = window.history
     r match {
-      case PushState(url)    => CallbackTo(h.pushState   (hs, ht, url.value)) << logger(s"PushState: [${url.value}]")
-      case ReplaceState(url) => CallbackTo(h.replaceState(hs, ht, url.value)) << logger(s"ReplaceState: [${url.value}]")
-      case BroadcastSync     => broadcast(())                                 << logger("Broadcasting sync request.")
-      case Return(a)         => CallbackTo.pure(a)
-      case Log(msg)          => logger(msg())
-      case Sequence(a, b)    => a.foldLeft[CallbackTo[_]](Callback.empty)(_ >> interpret(_)) >> interpret(b)
+
+      case PushState(url) =>
+        CallbackTo(h.pushState(hs, ht, url.value)) << logger(s"PushState: [${url.value}]")
+
+      case ReplaceState(url) =>
+        CallbackTo(h.replaceState(hs, ht, url.value)) << logger(s"ReplaceState: [${url.value}]")
+
+      case SetWindowLocation(url) =>
+        CallbackTo(window.location.href = url.value) << logger(s"SetWindowLocation: [${url.value}]")
+
+      case BroadcastSync =>
+        broadcast(()) << logger("Broadcasting sync request.")
+
+      case Return(a) =>
+        CallbackTo.pure(a)
+
+      case Log(msg) =>
+        logger(msg())
+
+      case Sequence(a, b) =>
+        a.foldLeft[CallbackTo[_]](Callback.empty)(_ >> interpret(_)) >> interpret(b)
     }
   }
 

@@ -18,7 +18,11 @@ object ReusabilityOverlay {
 
   private val key = "reusabilityOverlay"
 
-  def install[P: Reusability, C <: Children, S: Reusability, B](newOverlay: ScalaComponent.MountedImpure[P, S, B] => ReusabilityOverlay): ScalaComponent.Config[P, C, S, B] = {
+  def install[P: Reusability, C <: Children, S: Reusability, B, U <: UpdateSnapshot]: ScalaComponent.Config[P, C, S, B, U, U] =
+    install(DefaultReusabilityOverlay.defaults)
+
+  def install[P: Reusability, C <: Children, S: Reusability, B, U <: UpdateSnapshot]
+      (newOverlay: ScalaComponent.MountedImpure[P, S, B] => ReusabilityOverlay): ScalaComponent.Config[P, C, S, B, U, U] = {
 
     // Store the overlay stats on each instance
     def get(raw: ScalaComponent.RawMounted[P, S, B]): ReusabilityOverlay = {
@@ -30,7 +34,7 @@ object ReusabilityOverlay {
       }(_.unbox)
     }
 
-    Reusability.shouldComponentUpdateAnd[P, C, S, B] { r =>
+    Reusability.shouldComponentUpdateAnd[P, C, S, B, U] { r =>
       val overlay = get(r.mounted.js.raw)
       if (r.update) {
         def fmt(update: Boolean, name: String, va: Any, vb: Any) =
@@ -135,13 +139,14 @@ object DefaultReusabilityOverlay {
                   frame1: CSSStyleDeclaration => Unit,
                   frame2: CSSStyleDeclaration => Unit): Comp => Callback =
     $ => Callback {
-      val n = $.getDOMNode
-      before(n.style)
-      window.requestAnimationFrame{(_: Double) =>
-        frame1(n.style)
-        window.requestAnimationFrame((_: Double) =>
-          frame2(n.style)
-        )
+      $.getDOMNode.mounted.map(_.node).foreach { n =>
+        before(n.style)
+        window.requestAnimationFrame{(_: Double) =>
+          frame1(n.style)
+          window.requestAnimationFrame((_: Double) =>
+            frame2(n.style)
+          )
+        }
       }
     }
 
@@ -194,38 +199,40 @@ class DefaultReusabilityOverlay($: Comp, options: DefaultReusabilityOverlay.Opti
     // Create
     val tmp = document.createElement("div").domAsHtml
     document.body.appendChild(tmp)
-    raw.ReactDOM.render(options.template.template.rawElement, tmp)
-    val outer = tmp.firstChild
-    document.body.replaceChild(outer, tmp)
+    options.template.template.renderIntoDOM(tmp, Callback {
+      val outer = tmp.firstChild
+      document.body.replaceChild(outer, tmp)
 
-    // Customise
-    outer.addEventListener("click", onClick.toJsFn1)
+      // Customise
+      outer.addEventListener("click", onClick.toJsFn1)
 
-    // Store
-    val good = options.template good outer
-    val bad = options.template bad outer
-    overlay = Some(Nodes(outer, good, bad))
+      // Store
+      val good = options.template good outer
+      val bad  = options.template bad outer
+      overlay  = Some(Nodes(outer, good, bad))
+    })
   }
 
   def withNodes(f: Nodes => Unit): Callback =
     Callback(overlay foreach f)
 
   val updatePosition = withNodes { n =>
-    val d = $.getDOMNode
-    val ds = d.getBoundingClientRect()
-    val ns = n.outer.getBoundingClientRect()
+    $.getDOMNode.mounted.map(_.node).foreach { d =>
+      val ds = d.getBoundingClientRect()
+      val ns = n.outer.getBoundingClientRect()
 
-    var y = window.pageYOffset + ds.top
-    var x = ds.left
+      var y = window.pageYOffset + ds.top
+      var x = ds.left
 
-    if (d.tagName == "TABLE") {
-      y -= ns.height
-      x -= ns.width
-    } else if (d.tagName == "TR")
-      x -= ns.width
+      if (d.tagName == "TABLE") {
+        y -= ns.height
+        x -= ns.width
+      } else if (d.tagName == "TR")
+        x -= ns.width
 
-    n.outer.style.top  = y.toString + "px"
-    n.outer.style.left = x.toString + "px"
+      n.outer.style.top  = y.toString + "px"
+      n.outer.style.left = x.toString + "px"
+    }
   }
 
   val updateContent = withNodes { n =>

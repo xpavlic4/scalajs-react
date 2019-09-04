@@ -1,6 +1,5 @@
 package japgolly.scalajs.react.core
 
-import scalajs.js
 import utest._
 import scalaz.Equal
 import japgolly.scalajs.react._
@@ -20,9 +19,9 @@ object ScalaComponentPTest extends TestSuite {
       .render_P(p => raw.React.createElement("div", null, "Hello ", p.name))
       .build
 
-  override def tests = TestSuite {
+  override def tests = Tests {
 
-    'displayName {
+    "displayName" - {
       assertEq(BasicComponent.displayName, "HelloMessage")
 //      ReactTestUtils.withRenderedIntoDocument(BasicComponent(BasicProps("X"))) { m =>
 //        println(inspectObject(m.raw))
@@ -30,14 +29,14 @@ object ScalaComponentPTest extends TestSuite {
 //      }
     }
 
-    'types {
+    "types" - {
       import InferenceUtil._
       import ScalaComponent._
-      'cu - test[Component[P, S, B, CtorType.Nullary]](_.ctor()).expect[Unmounted[P, S, B]]
-      'um - test[Unmounted[P, S, B]](_.renderIntoDOM(null)).expect[MountedImpure[P, S, B]]
+      "cu" - test[Component[P, S, B, CtorType.Nullary]](_.ctor()).expect[Unmounted[P, S, B]]
+      "um" - test[Unmounted[P, S, B]](_.renderIntoDOM(null)).expect[MountedImpure[P, S, B]]
     }
 
-    'basic {
+    "basic" - {
       val unmounted = BasicComponent(BasicProps("Bob"))
       assertEq(unmounted.props.name, "Bob")
       assertEq(unmounted.propsChildren.count, 0)
@@ -46,9 +45,8 @@ object ScalaComponentPTest extends TestSuite {
       assertEq(unmounted.ref, None)
       ReactTestUtils.withNewBodyElement { mountNode =>
         val mounted = unmounted.renderIntoDOM(mountNode)
-        val n = mounted.getDOMNode
+        val n = mounted.getDOMNode.asMounted().asElement()
         assertOuterHTML(n, "<div>Hello Bob</div>")
-        assertEq(mounted.isMounted, None)
         assertEq(mounted.props.name, "Bob")
         assertEq(mounted.propsChildren.count, 0)
         assertEq(mounted.propsChildren.isEmpty, true)
@@ -57,30 +55,30 @@ object ScalaComponentPTest extends TestSuite {
       }
     }
 
-    'withKey {
+    "withKey" - {
       ReactTestUtils.withNewBodyElement { mountNode =>
         val u = BasicComponent.withKey("k")(BasicProps("Bob"))
         assertEq(u.key, Option[Key]("k"))
         val m = u.renderIntoDOM(mountNode)
-        assertOuterHTML(m.getDOMNode, "<div>Hello Bob</div>")
+        assertOuterHTML(m.getDOMNode.asMounted().asElement(), "<div>Hello Bob</div>")
       }
     }
 
-    'ctorReuse -
+    "ctorReuse" -
       assert(BasicComponent(BasicProps("a")) ne BasicComponent(BasicProps("b")))
 
-    'ctorMap - {
+    "ctorMap" - {
       val c2 = BasicComponent.mapCtorType(_ withProps BasicProps("hello!"))
       val unmounted = c2()
       assertEq(unmounted.props.name, "hello!")
       ReactTestUtils.withNewBodyElement { mountNode =>
         val mounted = unmounted.renderIntoDOM(mountNode)
-        val n = mounted.getDOMNode
+        val n = mounted.getDOMNode.asMounted().asElement()
         assertOuterHTML(n, "<div>Hello hello!</div>")
       }
     }
 
-    'lifecycle {
+    "lifecycle1" - {
       case class Props(a: Int, b: Int, c: Int) {
         def -(x: Props) = Props(
           this.a - x.a,
@@ -126,7 +124,7 @@ object ScalaComponentPTest extends TestSuite {
         def incUnmountCount = Callback(willUnmountCount += 1)
       }
 
-      val Comp = ScalaComponent.builder[Props]("")
+      val Inner = ScalaComponent.builder[Props]("")
         .stateless
         .backend(new Backend(_))
         .render_P(p => raw.React.createElement("div", null, s"${p.a} ${p.b} ${p.c}"))
@@ -142,28 +140,69 @@ object ScalaComponentPTest extends TestSuite {
         .componentWillReceiveProps(x => x.backend.receive(x.currentProps, x.nextProps))
         .build
 
-      ReactTestUtils.withNewBodyElement { mountNode =>
+      val Comp = ScalaComponent.builder[Props]("")
+          .initialState[Option[String]](None) // error message
+          .render_PS((p, s) => s match {
+            case None    => Inner(p).vdomElement
+            case Some(e) => raw.React.createElement("div", null, "Error: " + e)
+          })
+        .componentDidCatch($ => $.setState(Some($.error.message.replaceFirst("'.+' *", ""))))
+        .build
+
+      val staleDomNodeCallback = ReactTestUtils.withNewBodyElement { mountNode =>
         assertMountCount(0)
 
         var mounted = Comp(Props(1, 2, 3)).renderIntoDOM(mountNode)
         assertMountCount(1)
-        assertOuterHTML(mounted.getDOMNode, "<div>1 2 3</div>")
+        assertOuterHTML(mounted.getDOMNode.asMounted().asElement(), "<div>1 2 3</div>")
         assertUpdates()
 
         mounted = Comp(Props(1, 2, 8)).renderIntoDOM(mountNode)
-        assertOuterHTML(mounted.getDOMNode, "<div>1 2 3</div>")
+        assertOuterHTML(mounted.getDOMNode.asMounted().asElement(), "<div>1 2 3</div>")
         assertUpdates()
 
         mounted = Comp(Props(1, 5, 8)).renderIntoDOM(mountNode)
-        assertOuterHTML(mounted.getDOMNode, "<div>1 5 8</div>")
+        assertOuterHTML(mounted.getDOMNode.asMounted().asElement(), "<div>1 5 8</div>")
         assertUpdates(Props(0, 3, 0))
 
         assertEq("willUnmountCount", willUnmountCount, 0)
+        mounted = Comp(null).renderIntoDOM(mountNode)
+        assertOuterHTML(mounted.getDOMNode.asMounted().asElement(), "<div>Error: Cannot read property of null</div>")
+        assertEq("willUnmountCount", willUnmountCount, 1)
+
+        mounted.withEffectsPure.getDOMNode
       }
 
       assertMountCount(1)
       assertEq("willUnmountCount", willUnmountCount, 1)
-      assertEq("recievedPropDeltas", recievedPropDeltas, Vector(Props(0, 0, 5), Props(0, 3, 0)))
+      assertEq("receivedPropDeltas", recievedPropDeltas, Vector(Props(0, 0, 5), Props(0, 3, 0)))
+
+      assert(staleDomNodeCallback.runNow().mounted.isEmpty)
+    }
+
+    "lifecycle2" - {
+      type Props = Int
+      var snapshots = Vector.empty[String]
+
+      val Comp = ScalaComponent.builder[Props]("")
+        .initialState(0)
+        .noBackend
+        .render_PS((p, s) => raw.React.createElement("div", null, s"p=$p s=$s"))
+        .getDerivedStateFromProps(p => Some(p + 100))
+        .getSnapshotBeforeUpdatePure($ => s"${$.prevProps} -> ${$.currentProps}")
+        .componentDidUpdate($ => Callback(snapshots :+= $.snapshot))
+        .build
+
+      ReactTestUtils.withNewBodyElement { mountNode =>
+        var mounted = Comp(10).renderIntoDOM(mountNode)
+        assertOuterHTML(mounted.getDOMNode.asMounted().asElement(), "<div>p=10 s=110</div>")
+        assertEq(snapshots, Vector())
+
+        mounted = Comp(20).renderIntoDOM(mountNode)
+        assertOuterHTML(mounted.getDOMNode.asMounted().asElement(), "<div>p=20 s=120</div>")
+        assertEq(snapshots, Vector("10 -> 20"))
+      }
+
     }
   }
 }
@@ -177,65 +216,105 @@ object ScalaComponentSTest extends TestSuite {
   implicit val equalState: Equal[State] = Equal.equalA
   implicit val equalState2: Equal[State2] = Equal.equalA
 
-  class Backend($: BackendScope[Unit, State]) {
+  class Backend($: BackendScope[Int, State]) {
     val inc: Callback =
       $.modState(s => s.copy(s.num1 + 1))
   }
 
   val Component =
-    ScalaComponent.builder[Unit]("State, no Props")
+    ScalaComponent.builder[Int]("")
       .initialState(State(123, State2(400, 7)))
       .backend(new Backend(_))
-      .render_S(s => raw.React.createElement("div", null, "State = ", s.num1, " + ", s.s2.num2, " + ", s.s2.num3))
+      .render_PS((p, s) => raw.React.createElement("div", null, "Props = ", p, ". State = ", s.num1, " + ", s.s2.num2, " + ", s.s2.num3))
       .build
 
-  override def tests = TestSuite {
+  override def tests = Tests {
 
-    'main {
-      val unmounted = Component()
+    "main" - {
+      var callCount = 0
+      val incCallCount = Callback(callCount += 1)
+      val p = 9000
+      val unmounted = Component(p)
       assert(unmounted.propsChildren.isEmpty)
       assertEq(unmounted.key, None)
       assertEq(unmounted.ref, None)
       ReactTestUtils.withNewBodyElement { mountNode =>
         val mounted = unmounted.renderIntoDOM(mountNode)
-        val n = mounted.getDOMNode
-
-        assertOuterHTML(n, "<div>State = 123 + 400 + 7</div>")
-        assertEq(mounted.isMounted, None)
-        assertEq(mounted.propsChildren.count, 0)
-        assertEq(mounted.propsChildren.isEmpty, true)
-        assertEq(mounted.state, State(123, State2(400, 7)))
+        val n = mounted.getDOMNode.asMounted().asElement()
         val b = mounted.backend
+        var s = State(123, State2(400, 7))
+        var cc = 0
 
-        mounted.setState(State(666, State2(500, 7)))
-        assertOuterHTML(n, "<div>State = 666 + 500 + 7</div>")
-        assertEq(mounted.isMounted, None)
-        assertEq(mounted.propsChildren.isEmpty, true)
-        assertEq(mounted.state, State(666, State2(500, 7)))
-        assert(mounted.backend eq b)
+        def test(children: Int = 0, incCallCount: Boolean = false): Unit = {
+          if (incCallCount) cc += 1
+          assertOuterHTML(n, s"<div>Props = $p. State = ${s.num1} + ${s.s2.num2} + ${s.s2.num3}</div>")
+          assertEq(mounted.state, s)
+          assertEq("propsChildren.count", mounted.propsChildren.count, children)
+          assertEq("propsChildren.isEmpty", mounted.propsChildren.isEmpty, children == 0)
+          assertEq("callCount", callCount, cc)
+          assert(mounted.backend eq b)
+        }
+
+        test()
+
+        s = State(66, State2(50, 77))
+        mounted.setState(s, incCallCount)
+        test(incCallCount = true)
+
+        s = State(100, State2(300, 11))
+        mounted.setStateOption(Some(s), incCallCount)
+        test(incCallCount = true)
+
+        mounted.setStateOption(None, incCallCount)
+        test(incCallCount = true) // If this ever fails (i.e. React stops calling cb on setState(null, cb)),
+                                  // then change the logic in StateAccess.apply & ReactTestVar
+
+        s = State(88, s.s2)
+        mounted.modState(_.copy(88), incCallCount)
+        test(incCallCount = true)
+
+        s = State(9088, s.s2)
+        mounted.modState((s, p) => s.copy(s.num1 + p), incCallCount)
+        test(incCallCount = true)
+
+        s = State(828, s.s2)
+        mounted.modStateOption(x => Some(x.copy(828)), incCallCount)
+        test(incCallCount = true)
+
+        s = State(9828, s.s2)
+        mounted.modStateOption((s, p) => Some(s.copy(p + 828)), incCallCount)
+        test(incCallCount = true)
+
+        mounted.modStateOption(_ => None, incCallCount)
+        test(incCallCount = true)
+
+        s = State(666, State2(500, 7))
+        mounted.setState(s)
+        test()
 
         mounted.backend.inc.runNow()
-        assertOuterHTML(n, "<div>State = 667 + 500 + 7</div>")
-        assertEq(mounted.isMounted, None)
-        assertEq(mounted.propsChildren.isEmpty, true)
-        assertEq(mounted.state, State(667, State2(500, 7)))
-        assert(mounted.backend eq b)
+        s = State(667, State2(500, 7))
+        test()
 
         val zoomed = mounted
           .zoomState(_.s2)(n => _.copy(s2 = n))
           .zoomState(_.num2)(n => _.copy(num2 = n))
         assertEq(zoomed.state, 500)
         zoomed.modState(_ + 1)
-        assertOuterHTML(n, "<div>State = 667 + 501 + 7</div>")
-        assertEq(mounted.isMounted, None)
-        assertEq(mounted.propsChildren.isEmpty, true)
-        assertEq(mounted.state, State(667, State2(501, 7)))
-        assert(mounted.backend eq b)
+        s = State(667, State2(501, 7))
+        test()
       }
     }
 
-    'ctorReuse -
+    "ctorReuse" - {
+      val Component =
+        ScalaComponent.builder[Unit]("")
+          .initialState(123)
+          .render_S(s => raw.React.createElement("div", null, s))
+          .build
+
       assert(Component() eq Component())
+    }
 
   }
 }

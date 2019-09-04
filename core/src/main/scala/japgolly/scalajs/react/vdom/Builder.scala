@@ -14,6 +14,7 @@ trait Builder {
   val addStyle       : (String, js.Any) => Unit
   val addStylesObject: js.Object        => Unit
   val appendChild    : RawChild         => Unit
+  val setKey         : js.Any           => Unit
 
   final def addStyles(j: js.Any): Unit = {
     // Hack because Attr.ValueType.Fn takes a js.Any => Unit.
@@ -26,7 +27,7 @@ trait Builder {
 // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
 object Builder {
-  type RawChild = raw.ReactNodeList
+  type RawChild = raw.React.Node
 
   def setObjectKeyValue(o: js.Object, k: String, v: js.Any): Unit =
     o.asInstanceOf[js.Dynamic].updateDynamic(k)(v)
@@ -39,6 +40,18 @@ object Builder {
 
   // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
+  /**
+    * Raw JS values of:
+    * - className
+    * - key
+    * - props
+    * - styles
+    * - children
+    *
+    * Everything here is mutable.
+    *
+    * There are convenience methods to (mutably) add className and styles to props.
+    */
   trait ToJs extends Builder {
     // Exposing vars here is acceptable because:
     // 1. The contents are all mutable anyway and a defensive-copy cost isn't worth it
@@ -48,6 +61,7 @@ object Builder {
     var props    : js.Object          = new js.Object
     var styles   : js.Object          = new js.Object
     var children : js.Array[RawChild] = new js.Array[RawChild]()
+    var key      : js.UndefOr[js.Any] = js.undefined
 
     var nonEmptyClassName: js.UndefOr[js.Any            ] = js.undefined
     def nonEmptyProps    : js.UndefOr[js.Object         ] = nonEmptyObject(props)
@@ -58,7 +72,7 @@ object Builder {
       setObjectKeyValue(props, _, _)
 
     override val addClassName: js.Any => Unit =
-      n => nonEmptyClassName = nonEmptyClassName.fold(n)(_ + " " + n)
+      n => nonEmptyClassName = nonEmptyClassName.fold(n)(_.toString + " " + n)
 
     override val addStyle: (String, js.Any) => Unit =
       setObjectKeyValue(styles, _, _)
@@ -69,43 +83,77 @@ object Builder {
     override val appendChild: RawChild => Unit =
       children.push(_)
 
+    override val setKey: js.Any => Unit =
+      k => key = k
+
+    def addKeyToProps(): Unit =
+      key.foreach(setObjectKeyValue(props, "key", _))
+
     def addClassNameToProps(): Unit =
       nonEmptyClassName.foreach(setObjectKeyValue(props, "className", _))
 
     def addStyleToProps(): Unit =
       nonEmptyStyles.foreach(setObjectKeyValue(props, "style", _))
+
+    def childrenAsVdomNodes: List[VdomNode] = {
+      import Implicits._
+      var i = children.length
+      var nodes = List.empty[VdomNode]
+      while (i > 0) {
+        i -= 1
+        nodes ::= children(i)
+      }
+      nodes
+    }
+
+    def nonEmptyChildrenAsVdomNodes: js.UndefOr[List[VdomNode]] =
+      if (children.length == 0) js.undefined else childrenAsVdomNodes
   }
 
   // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
   class ToVdomElement extends ToJs {
     def render(tag: String): VdomElement = {
+      val r = (new ToRawReactElement).render(tag)
+      VdomElement(r)
+    }
+  }
+
+  class ToRawReactElement extends ToJs {
+    def render(tag: String): raw.React.Element = {
       addClassNameToProps()
       addStyleToProps()
-      val e = ToRawReactElement.build(tag, props, children)
-      VdomElement(e)
+      ToRawReactElement.build(tag, props, key, children)
     }
   }
 
   object ToRawReactElement {
-    type BuildFn = (String, js.Object, js.Array[RawChild]) => raw.ReactElement
+    // type, props, key, children
+    type BuildFn = (String, js.Object, js.UndefOr[js.Any], js.Array[RawChild]) => raw.React.Element
 
-    val build: BuildFn =
-      if (developmentMode)
+    val build: BuildFn = {
 
-        // Development mode
-        (tag, props, children) => {
-          raw.React.createElement(tag, props, children: _*)
+      val unoptimised: BuildFn =
+        (tag, props, key, children) => {
+          key.foreach(setObjectKeyValue(props, "key", _))
+          raw.React.createElement(tag, props, children.toSeq: _*)
         }
 
+      if (developmentMode)
+
+      // Development mode
+        unoptimised
+
       else {
-
         // Production mode
-        // http://babeljs.io/blog/2015/03/31/5.0.0/#inline-elements
+        // https://babeljs.io/docs/plugins/transform-react-inline-elements/
+        // Taken from Babel @ 960fa66c9ef013e247311144332756cdfc9d51bc
 
-        // Logic here taken from:
-        // https://github.com/babel/babel/blob/master/packages/babel-helpers/src/helpers.js
-        // https://github.com/babel/babel/tree/master/packages/babel-plugin-transform-react-inline-elements/test/fixtures/inline-elements
+        // To check for new changes:
+        // before=960fa66c9ef013e247311144332756cdfc9d51bc
+        // after=master
+        // git diff -M -w -b $before..$after -- packages/babel-helpers/src/helpers.js
+        // git diff -M -w -b $before..$after -- packages/babel-plugin-transform-react-inline-elements/test/fixtures/inline-elements
 
         val REACT_ELEMENT_TYPE: js.Any =
           try
@@ -114,13 +162,15 @@ object Builder {
             case _: Throwable => 0xeac7
           }
 
-        (tag, props, children) => {
+        (tag, props, key, children) => {
+
+          // From packages/babel-plugin-transform-react-inline-elements/test/fixtures/inline-elements/ref-deopt
           val ref = props.asInstanceOf[js.Dynamic].ref.asInstanceOf[js.UndefOr[js.Any]]
           if (ref.isDefined)
-            raw.React.createElement(tag, props, children: _*)
-          else {
+            unoptimised(tag, props, key, children)
 
-            val key = props.asInstanceOf[js.Dynamic].key.asInstanceOf[js.UndefOr[js.Any]]
+          else {
+            // From packages/babel-helpers/src/helpers.js # jsx()
 
             val clen = children.length
             if (clen != 0) {
@@ -136,13 +186,14 @@ object Builder {
                 ref        = null,
                 props      = props,
                 _owner     = null)
-                .asInstanceOf[raw.ReactElement]
+                .asInstanceOf[raw.React.Element]
 
-  //         org.scalajs.dom.console.log("VDOM: ", output)
+            // org.scalajs.dom.console.log("VDOM: ", output)
 
             output
           }
         }
       }
+    }
   }
 }

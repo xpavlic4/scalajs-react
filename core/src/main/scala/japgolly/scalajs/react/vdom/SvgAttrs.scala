@@ -369,6 +369,8 @@ trait SvgAttrs {
 
   final def floodOpacity = VdomAttr("floodOpacity")
 
+  final def focusable = VdomAttr("focusable")
+
   final def fontFamily = VdomAttr("fontFamily")
 
   final def fontSize = VdomAttr("fontSize")
@@ -455,11 +457,15 @@ trait SvgAttrs {
 
   final def operator = VdomAttr("operator")
 
+  final def orient = VdomAttr("orient")
+
   final def order = VdomAttr("order")
 
   final def overflow = VdomAttr("overflow")
 
   final def paintOrder = VdomAttr("paintOrder")
+
+  final def pathAttr = VdomAttr("path")
 
   final def pathLength = VdomAttr("pathLength")
 
@@ -488,6 +494,10 @@ trait SvgAttrs {
   final def r = VdomAttr("r")
 
   final def radius = VdomAttr("radius")
+
+  final def refX = VdomAttr("refX")
+
+  final def refY = VdomAttr("refY")
 
   final def repeatCount = VdomAttr("repeatCount")
 

@@ -1,9 +1,10 @@
 package japgolly.scalajs.react
 
 import scala.annotation.tailrec
-import scala.collection.generic.CanBuildFrom
 import japgolly.scalajs.react.internal.{OptionLike, identityFn}
 import CallbackTo.MapGuard
+
+import scala.collection.compat._
 
 // TODO Document CallbackOption
 
@@ -12,10 +13,6 @@ object CallbackOption {
 
   def apply[A](cb: CallbackTo[Option[A]]): CallbackOption[A] =
     new CallbackOption(cb.toScalaFn)
-
-  @deprecated("Use CallbackOption.pass instead.", "0.10.1")
-  def empty: CallbackOption[Unit] =
-    pass
 
   def pass: CallbackOption[Unit] =
     CallbackOption(CallbackTo pure someUnit)
@@ -72,11 +69,11 @@ object CallbackOption {
       go(a)
     }
 
-  def traverse[T[X] <: TraversableOnce[X], A, B](ta: => T[A])(f: A => CallbackOption[B])
-                                                (implicit cbf: CanBuildFrom[T[A], B, T[B]]): CallbackOption[T[B]] =
+  def traverse[T[X] <: IterableOnce[X], A, B](ta: => T[A])(f: A => CallbackOption[B])
+                                                (implicit cbf: BuildFrom[T[A], B, T[B]]): CallbackOption[T[B]] =
     liftOption {
-      val it = ta.toIterator
-      val r = cbf(ta)
+      val it = ta.iterator
+      val r = cbf.newBuilder(ta)
       @tailrec
       def go: Option[T[B]] =
         if (it.hasNext)
@@ -89,15 +86,9 @@ object CallbackOption {
       go
     }
 
-  def sequence[T[X] <: TraversableOnce[X], A](tca: => T[CallbackOption[A]])
-                                             (implicit cbf: CanBuildFrom[T[CallbackOption[A]], A, T[A]]): CallbackOption[T[A]] =
+  def sequence[T[X] <: IterableOnce[X], A](tca: => T[CallbackOption[A]])
+                                             (implicit cbf: BuildFrom[T[CallbackOption[A]], A, T[A]]): CallbackOption[T[A]] =
     traverse(tca)(identityFn)
-
-  @deprecated("Use .traverseOption", "1.0.0")
-  def traverseO[A, B](oa: => Option[A])(f: A => CallbackOption[B]): CallbackOption[B] = traverseOption(oa)(f)
-
-  @deprecated("Use .sequenceOption", "1.0.0")
-  def sequenceO[A](oca: => Option[CallbackOption[A]]): CallbackOption[A] = sequenceOption(oca)
 
   /**
    * NOTE: Technically a proper, lawful traversal should return `CallbackOption[Option[B]]`.
@@ -144,12 +135,9 @@ object CallbackOption {
    * 1) It only executes if `e.defaultPrevented` is `false`.
    * 2) It sets `e.preventDefault` on successful completion.
    */
+  @deprecated("Use callback.asEventDefault(e) instead", "1.3.0")
   def asEventDefault[A](e: ReactEvent, co: CallbackOption[A]): CallbackOption[A] =
-    for {
-      _ <- unless(e.defaultPrevented)
-      a <- co
-      _ <- e.preventDefaultCB.toCBO
-    } yield a
+    co.asEventDefault(e)
 
   @inline implicit def callbackOptionCovariance[A, B >: A](c: CallbackOption[A]): CallbackOption[B] =
     c.widen
@@ -171,12 +159,12 @@ object CallbackOption {
 final class CallbackOption[A](private val cbfn: () => Option[A]) extends AnyVal {
   import CallbackOption.someUnit
 
+  /** The underlying representation of this value-class */
+  @inline def underlyingRepr: () => Option[A] =
+    cbfn
+
   def widen[B >: A]: CallbackOption[B] =
     new CallbackOption(cbfn)
-
-  @deprecated("Use .toCallback instead of .get.void, or .asCallback instead of .get", "1.0.1")
-  def get: CallbackTo[Option[A]] =
-    asCallback
 
   def getOrElse[AA >: A](default: => AA): CallbackTo[AA] =
     asCallback.map(_ getOrElse default)
@@ -186,10 +174,6 @@ final class CallbackOption[A](private val cbfn: () => Option[A]) extends AnyVal 
 
   def toCallback(implicit ev: A <:< Unit): Callback =
     asCallback.void
-
-  @deprecated("Use .asCallback.map(_.isDefined)", "1.0.1")
-  def toBoolCB: CallbackTo[Boolean] =
-    asCallback.map(_.isDefined)
 
   def unary_!(implicit ev: A <:< Unit): CallbackOption[Unit] =
     CallbackOption(asCallback.map {
@@ -208,6 +192,9 @@ final class CallbackOption[A](private val cbfn: () => Option[A]) extends AnyVal 
 
   def flatMapOption[B](f: A => Option[B]): CallbackOption[B] =
     CallbackOption(asCallback.map(_ flatMap f))
+
+  def flatMapCB[B](f: A => CallbackTo[B]): CallbackOption[B] =
+    flatMap(a => CallbackOption.liftCallback(f(a)))
 
   def flatMap[B](f: A => CallbackOption[B]): CallbackOption[B] =
     CallbackOption(asCallback flatMap {
@@ -241,6 +228,10 @@ final class CallbackOption[A](private val cbfn: () => Option[A]) extends AnyVal 
    */
   def <<[B](prev: CallbackOption[B]): CallbackOption[A] =
     prev >> this
+
+  /** Convenient version of `<<` that accepts an Option */
+  def <<?[B](prev: Option[CallbackOption[B]]): CallbackOption[A] =
+    prev.fold(this)(_ >> this)
 
   /**
    * Alias for `>>`.
@@ -314,4 +305,12 @@ final class CallbackOption[A](private val cbfn: () => Option[A]) extends AnyVal 
 
   def ||[B](b: CallbackOption[B]): CallbackOption[Unit] =
     void | b.void
+
+  /** Wraps this so that:
+    *
+    * 1) It only executes if `e.defaultPrevented` is `false`.
+    * 2) It sets `e.preventDefault` on successful completion.
+    */
+  def asEventDefault(e: ReactEvent): CallbackOption[A] =
+    (this <* e.preventDefaultCB.toCBO).unless(e.defaultPrevented)
 }

@@ -6,7 +6,7 @@ Included is a router (in the orbit of Single-Page Applications) that is written 
 The package is `japgolly.scalajs.react.extra.router`.
 
 ```scala
-libraryDependencies += "com.github.japgolly.scalajs-react" %%% "extra" % "1.0.1"
+libraryDependencies += "com.github.japgolly.scalajs-react" %%% "extra" % "1.4.2"
 ```
 
 ## Contents
@@ -106,6 +106,12 @@ case class ProductInfo(id: ProductId) extends MyPages
 
 Next, you'll want to call `RouterConfigDsl.buildConfig` and use the provided DSL.
 ```scala
+import japgolly.scalajs.react.extra.router._
+
+// import japgolly.scalajs.react.vdom.Implicits._
+// ↑ Depending on your usage you might also need this
+// ↑ If you have VDOM-related compilation errors, add this import.
+
 val routerConfig = RouterConfigDsl[MyPages].buildConfig { dsl =>
   import dsl._
 
@@ -656,4 +662,4 @@ There are also unit tests available in the
 [japgolly.scalajs.react.extra.router](../test/src/test/scala/japgolly/scalajs/react/extra/router)
 package.
 
-[This] (https://github.com/chandu0101/scalajs-react-template) simple example [demonstrates](http://chandu0101.github.io/scalajs-react-template/) routing as well.
+[This](https://github.com/chandu0101/scalajs-react-template) simple example [demonstrates](http://chandu0101.github.io/scalajs-react-template/) routing as well.

@@ -2,7 +2,7 @@ package ghpages
 
 import java.util.regex.Pattern
 import scala.reflect.macros.blackbox.Context
-import japgolly.scalajs.react.internal.ReactMacroUtils
+import japgolly.scalajs.react.internal.MacroUtils
 
 object GhPagesMacros {
   def exampleSource: String = macro GhPagesMacroImpls.exampleSource
@@ -15,7 +15,7 @@ object GhPagesMacroImpls {
     s.trim.isEmpty
 
   @annotation.tailrec
-  def trimLeftAll(ls: Stream[String]): Stream[String] =
+  def trimLeftAll(ls: List[String]): List[String] =
     if (ls.nonEmpty && ls.forall(_.headOption forall Character.isWhitespace))
       trimLeftAll(ls.map(s => if (s.isEmpty) s else s.tail))
     else
@@ -25,7 +25,7 @@ object GhPagesMacroImpls {
   val exampleEnd = "EXAMPLE:END"
 }
 
-class GhPagesMacroImpls(val c: Context) extends ReactMacroUtils {
+class GhPagesMacroImpls(val c: Context) extends MacroUtils {
   import GhPagesMacroImpls._
   import c.universe._
 
@@ -49,9 +49,11 @@ class GhPagesMacroImpls(val c: Context) extends ReactMacroUtils {
     val egContent = betweenMarkers(fileContent, exampleStart, exampleEnd)
 
     val lines =
-      egContent.split('\n').toStream
+      egContent.split('\n')
+        .iterator
         .map(trimRight.replaceFirstIn(_, ""))
         .dropWhile(blankLine)
+        .toList
         .reverse.dropWhile(blankLine).reverse
 
     val output = trimLeftAll(lines) mkString "\n"

@@ -16,13 +16,13 @@ object EventListenerTest extends TestSuite {
     .configure(EventListener.install("hello", _.modState(_ + 1)))
     .build
 
-  override def tests = TestSuite {
+  override def tests = Tests {
     val c = ReactTestUtils.renderIntoDocument(C())
 
     def dispatch(name: String) = {
       val e = document.createEvent("Event")
       e.initEvent(name, true, true)
-      c.getDOMNode dispatchEvent e
+      c.getDOMNode.asMounted().asElement() dispatchEvent e
     }
 
     assertEq(c.state, 0)

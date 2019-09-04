@@ -12,6 +12,7 @@ object GhPages {
   case object Home          extends Page
   case class Eg(e: Example) extends Page
   case object Doco          extends Page
+  case object AsyncTests    extends Page
 
   val routerConfig = RouterConfigDsl[Page].buildConfig { dsl =>
     import dsl._
@@ -21,8 +22,9 @@ object GhPages {
         .prefixPath_/("#examples").pmap[Page](Eg) { case Eg(e) => e }
 
     (trimSlashes
-    | staticRoute(root,   Home) ~> render(HomePage.component())
-    | staticRoute("#doc", Doco) ~> render(DocoPage.component())
+    | staticRoute(root,          Home)       ~> render(HomePage.component())
+    | staticRoute("#doc",        Doco)       ~> render(DocoPage.component())
+    | staticRoute("#test/async", AsyncTests) ~> render(secret.tests.AsyncTest.Component())
     | exampleRoutes
     )
       .notFound(redirectToPage(Home)(Redirect.Replace))
@@ -55,14 +57,17 @@ object GhPages {
     .build
 
   val baseUrl =
-    if (dom.window.location.hostname == "localhost")
-      BaseUrl.fromWindowOrigin_/
-    else
-      BaseUrl.fromWindowOrigin / "scalajs-react/"
+    dom.window.location.hostname match {
+      case "localhost" | "127.0.0.1" | "0.0.0.0" =>
+        BaseUrl.fromWindowUrl(_.takeWhile(_ != '#'))
+      case _ =>
+        BaseUrl.fromWindowOrigin / "scalajs-react/"
+    }
 
   def main(): Unit = {
+    val container = dom.document.getElementById("root")
     dom.console.info("Router logging is enabled. Enjoy!")
     val router = Router(baseUrl, routerConfig.logToConsole)
-    router() renderIntoDOM dom.document.body
+    router() renderIntoDOM container
   }
 }

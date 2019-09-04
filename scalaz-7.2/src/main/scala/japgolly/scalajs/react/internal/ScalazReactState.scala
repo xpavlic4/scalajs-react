@@ -11,7 +11,6 @@ trait ScalazReactState1 {
 
   final type ReactST[M[_], S, A] = ScalazReactState.ReactST[M, S, A]
   final type ReactS[S, A] = ScalazReactState.ReactS[S, A]
-
   final val ReactS = ScalazReactState.ReactS
 
   final type ChangeFilter[S] = ScalazReactState.ChangeFilter[S]
@@ -70,16 +69,16 @@ object ScalazReactState {
     def ret      [S,A](a: A)                  : ReactS[S,A]    = retM[Id, S, A](a)
     def set      [S]  (s: S)                  : ReactS[S,Unit] = mod((_: S) => s)
 
-    def applyT    [M[_],S,A](f: S => (S, A))         (implicit M: Monad      [M]): ReactST[M,S,A]    = applyM(s ⇒ M point f(s))
+    def applyT    [M[_],S,A](f: S => (S, A))         (implicit M: Monad      [M]): ReactST[M,S,A]    = applyM(s => M point f(s))
     def callbackM [M[_],S,A](ma: M[A], c: Callback)  (implicit M: Monad      [M]): ReactST[M,S,A]    = callbacksM(ma, _ => c)
     def callbackT [M[_],S,A](a: A, c: Callback)      (implicit M: Monad      [M]): ReactST[M,S,A]    = callbackM(M point a, c)
     def callbacksT[M[_],S,A](a: A, c: S => Callback) (implicit M: Monad      [M]): ReactST[M,S,A]    = callbacksM(M point a, c)
     def getT      [M[_],S]                           (implicit M: Applicative[M]): ReactST[M,S,S]    = get.lift[M]
-    def getsT     [M[_],S,A](f: S => A)              (implicit M: Monad      [M]): ReactST[M,S,A]    = getsM(s ⇒ M point f(s))
-    def liftR     [M[_],S,A](f: S ⇒ ReactST[M, S, A])(implicit M: Monad      [M]): ReactST[M,S,A]    = getT[M,S] flatMap f
-    def modT      [M[_],S]  (f: S => S)              (implicit M: Monad      [M]): ReactST[M,S,Unit] = modM(s ⇒ M point f(s))
-    def retM      [M[_],S,A](ma: M[A])               (implicit M: Monad      [M]): ReactST[M,S,A]    = getsM[M,S,A](_ ⇒ ma)
-    def setM      [M[_],S]  (ms: M[S])               (implicit M: Monad      [M]): ReactST[M,S,Unit] = modM((_: S) ⇒ ms)
+    def getsT     [M[_],S,A](f: S => A)              (implicit M: Monad      [M]): ReactST[M,S,A]    = getsM(s => M point f(s))
+    def liftR     [M[_],S,A](f: S => ReactST[M, S, A])(implicit M: Monad      [M]): ReactST[M,S,A]    = getT[M,S] flatMap f
+    def modT      [M[_],S]  (f: S => S)              (implicit M: Monad      [M]): ReactST[M,S,Unit] = modM(s => M point f(s))
+    def retM      [M[_],S,A](ma: M[A])               (implicit M: Monad      [M]): ReactST[M,S,A]    = getsM[M,S,A](_ => ma)
+    def setM      [M[_],S]  (ms: M[S])               (implicit M: Monad      [M]): ReactST[M,S,Unit] = modM((_: S) => ms)
     def setT      [M[_],S]  (s: S)                   (implicit M: Monad      [M]): ReactST[M,S,Unit] = setM(M point s)
 
     def applyM[M[_], S, A](f: S => M[(S, A)])(implicit F: Monad[M]): ReactST[M, S, A] =
@@ -198,50 +197,51 @@ object ScalazReactState {
 
     private def stateCB: CallbackTo[S] = fToCb(sa.state(si))
 
-    private def run[M[_], A, B](st: => ReactST[M, S, A], f: (S, S, A, => Callback) => CallbackTo[B])(implicit M: M ~> CallbackTo, N: Monad[M]): CallbackTo[B] =
-      stateCB.flatMap { s1 =>
-        val runCB: CallbackTo[(StateAndCallbacks[S], A)] = M(st run StateAndCallbacks(s1))
-        runCB.flatMap { x2 =>
-          val s2 : StateAndCallbacks[S] = x2._1
-          val a  : A                    = x2._2
-          def cb : Callback             = fToCb(sa.setStateCB(si)(s2.state, s2.cb))
-          val res: CallbackTo[B]        = f(s1, s2.state, a, cb)
-          res
-        }
-      }
+    private def run[M[_], A, B](st: => ReactST[M, S, A], conclude: (S, S, A, => Callback) => CallbackTo[B])
+                               (implicit M: Monad[M], trans: M ~> CallbackTo): CallbackTo[B] =
+      runM[M, A, B](st, conclude).flatMap(trans(_))
 
     def runState[M[_], A](st: => ReactST[M, S, A])(implicit M: M ~> CallbackTo, N: Monad[M]): Out[A] =
-      run[M, A, A](st, (s1, s2, a, cb) => cb.map(_ => a))
+      run[M, A, A](st, (_, _, a, cb) => cb.map(_ => a))
 
-    @deprecated("Use runStateFn.", "1.0.0")
-    def _runState[I, M[_], A](f: I => ReactST[M, S, A])(implicit M: M ~> CallbackTo, N: Monad[M]): I => Out[A] = runStateFn(f)
     def runStateFn[I, M[_], A](f: I => ReactST[M, S, A])(implicit M: M ~> CallbackTo, N: Monad[M]): I => Out[A] =
       i => runState(f(i))
 
-    @deprecated("Use runStateFn.", "1.0.0")
-    def _runState[I, M[_], A](f: I => ReactST[M, S, A], cb: I => Callback)(implicit M: M ~> CallbackTo, N: Monad[M]): I => Out[A] = runStateFn(f, cb)
     def runStateFn[I, M[_], A](f: I => ReactST[M, S, A], cb: I => Callback)(implicit M: M ~> CallbackTo, N: Monad[M]): I => Out[A] =
       i => runState(f(i) addCallback cb(i))
 
     def runStateF[M[_], A](st: => ReactST[M, S, A])(implicit M: M ~> CallbackTo, N: Monad[M], F: ChangeFilter[S]): Out[A] =
       run[M, A, A](st, (s1, s2, a, cb) => F(s1, s2, CallbackTo pure a, _ => cb.map(_ => a)))
 
-    @deprecated("Use runStateFnF.", "1.0.0")
-    def _runStateF[I, M[_], A](f: I => ReactST[M, S, A])(implicit M: M ~> CallbackTo, N: Monad[M], F: ChangeFilter[S]): I => Out[A] = runStateFnF(f)
     def runStateFnF[I, M[_], A](f: I => ReactST[M, S, A])(implicit M: M ~> CallbackTo, N: Monad[M], F: ChangeFilter[S]): I => Out[A] =
       i => runStateF(f(i))
 
-    @deprecated("Use runStateFnF.", "1.0.0")
-    def _runStateF[I, M[_], A](f: I => ReactST[M, S, A], cb: I => Callback)(implicit M: M ~> CallbackTo, N: Monad[M], F: ChangeFilter[S]): I => Out[A] = runStateFnF(f, cb)
-    def runStateFnF[I, M[_], A](f: I => ReactST[M, S, A], cb: I => Callback)(implicit M: M ~> CallbackTo, N: Monad[M], F: ChangeFilter[S]): I => Out[A] =
-      i => runStateF(f(i) addCallback cb(i))
+    private def runM[M[_], A, B](st: => ReactST[M, S, A], conclude: (S, S, A, => Callback) => CallbackTo[B])
+                                (implicit M: Monad[M]): CallbackTo[M[B]] =
+      stateCB.flatMap { s1 =>
+        type SA = (StateAndCallbacks[S], A)
+        val runCM: CallbackTo[M[SA]] = CallbackTo(st run ReactS.StateAndCallbacks(s1))
+        runCM.flatMap { msa =>
+          CallbackTo.liftTraverse[SA, B] { xa =>
+            val s2: StateAndCallbacks[S] = xa._1
+            val a : A                    = xa._2
+            def c : Callback             = fToCb(sa(si).setState(s2.state, s2.cb))
+            val cb: CallbackTo[B]        = conclude(s1, s2.state, a, c)
+            cb
+          }.id.map(M.map(msa))
+        }
+      }
+
+    def runStateM[M[_], A](st: => ReactST[M, S, A])(implicit M: Monad[M]): Out[M[A]] =
+      runM[M, A, A](st, (_, _, a, cb) => cb.map(_ => a))
+
+    def runStateFnM[I, M[_], A](f: I => ReactST[M, S, A])(implicit M: Monad[M]): I => Out[M[A]] =
+      i => runStateM[M, A](f(i))
 
     def modStateF(f: S => S, cb: Callback = Callback.empty)(implicit F: ChangeFilter[S]): Out[Unit] =
       stateCB.flatMap(s1 =>
-        F(s1, f(s1), Callback.empty, s => fToCb(sa.setStateCB(si)(s, cb))))
+        F(s1, f(s1), Callback.empty, s => fToCb(sa(si).setState(s, cb))))
 
-    @deprecated("Use modStateFnF.", "1.0.0")
-    def _modStateF[I](f: I => S => S, cb: Callback = Callback.empty)(implicit F: ChangeFilter[S]): I => Out[Unit] = modStateFnF(f, cb)
     def modStateFnF[I](f: I => S => S, cb: Callback = Callback.empty)(implicit F: ChangeFilter[S]): I => Out[Unit] =
       i => modStateF(f(i), cb)
   }

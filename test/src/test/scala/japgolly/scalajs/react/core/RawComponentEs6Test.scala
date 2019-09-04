@@ -9,14 +9,13 @@ import japgolly.scalajs.react.internal.JsUtil.inspectObject
 import japgolly.scalajs.react.test.{InferenceUtil, ReactTestUtils}
 import japgolly.scalajs.react.test.TestUtil._
 import japgolly.scalajs.react.vdom.ImplicitsFromRaw._
-import scala.scalajs.js.annotation.ScalaJSDefined
+import scala.scalajs.js.|
 
 object RawComponentEs6PTest extends TestSuite {
 
   case class BasicProps(name: String)
 
-  @ScalaJSDefined
-  class RawComp(ctorProps: Box[BasicProps]) extends raw.ReactComponentEs6[Box[BasicProps], Box[Unit]] {
+  class RawComp(ctorProps: Box[BasicProps]) extends raw.React.Component[Box[BasicProps], Box[Unit]] {
     override def render() =
       raw.React.createElement("div", null, "Hello ", this.props.unbox.name)
   }
@@ -28,9 +27,9 @@ object RawComponentEs6PTest extends TestSuite {
         .xmapProps(_.unbox)(Box(_))
         .xmapState(_.unbox)(Box(_))
 
-  override def tests = TestSuite {
+  override def tests = Tests {
 
-    'displayName {
+    "displayName" - {
       assertEq(BasicComponent.displayName, "HelloRaw6")
 //      ReactTestUtils.withRenderedIntoDocument(BasicComponent(BasicProps("X"))) { m =>
 //        println(inspectObject(m.raw))
@@ -38,14 +37,14 @@ object RawComponentEs6PTest extends TestSuite {
 //      }
     }
 
-    'types {
+    "types" - {
       import InferenceUtil._
       import ScalaComponent._
-      'cu - test[Component[P, S, B, CtorType.Nullary]](_.ctor()).expect[Unmounted[P, S, B]]
-      'um - test[Unmounted[P, S, B]](_.renderIntoDOM(null)).expect[MountedImpure[P, S, B]]
+      "cu" - test[Component[P, S, B, CtorType.Nullary]](_.ctor()).expect[Unmounted[P, S, B]]
+      "um" - test[Unmounted[P, S, B]](_.renderIntoDOM(null)).expect[MountedImpure[P, S, B]]
     }
 
-    'basic {
+    "basic" - {
       val unmounted = BasicComponent(BasicProps("Bob"))
       assertEq(unmounted.props.name, "Bob")
       assertEq(unmounted.propsChildren.count, 0)
@@ -54,7 +53,7 @@ object RawComponentEs6PTest extends TestSuite {
       assertEq(unmounted.ref, None)
       ReactTestUtils.withNewBodyElement { mountNode =>
         val mounted = unmounted.renderIntoDOM(mountNode)
-        val n = mounted.getDOMNode
+        val n = mounted.getDOMNode.asMounted().asElement()
         assertOuterHTML(n, "<div>Hello Bob</div>")
         // assertEq(mounted.isMounted, yesItsMounted)
         assertEq(mounted.props.name, "Bob")
@@ -65,30 +64,30 @@ object RawComponentEs6PTest extends TestSuite {
       }
     }
 
-    'withKey {
+    "withKey" - {
       ReactTestUtils.withNewBodyElement { mountNode =>
         val u = BasicComponent.withKey("k")(BasicProps("Bob"))
         assertEq(u.key, Option[Key]("k"))
         val m = u.renderIntoDOM(mountNode)
-        assertOuterHTML(m.getDOMNode, "<div>Hello Bob</div>")
+        assertOuterHTML(m.getDOMNode.asMounted().asElement(), "<div>Hello Bob</div>")
       }
     }
 
-    'ctorReuse -
+    "ctorReuse" -
       assert(BasicComponent(BasicProps("a")) ne BasicComponent(BasicProps("b")))
 
-    'ctorMap - {
+    "ctorMap" - {
       val c2 = BasicComponent.mapCtorType(_ withProps BasicProps("hello!"))
       val unmounted = c2()
       assertEq(unmounted.props.name, "hello!")
       ReactTestUtils.withNewBodyElement { mountNode =>
         val mounted = unmounted.renderIntoDOM(mountNode)
-        val n = mounted.getDOMNode
+        val n = mounted.getDOMNode.asMounted().asElement()
         assertOuterHTML(n, "<div>Hello hello!</div>")
       }
     }
 
-    'lifecycle {
+    "lifecycle" - {
       case class Props(a: Int, b: Int, c: Int) {
         def -(x: Props) = Props(
           this.a - x.a,
@@ -155,15 +154,15 @@ object RawComponentEs6PTest extends TestSuite {
 
         var mounted = Comp(Props(1, 2, 3)).renderIntoDOM(mountNode)
         assertMountCount(1)
-        assertOuterHTML(mounted.getDOMNode, "<div>1 2 3</div>")
+        assertOuterHTML(mounted.getDOMNode.asMounted().asElement(), "<div>1 2 3</div>")
         assertUpdates()
 
         mounted = Comp(Props(1, 2, 8)).renderIntoDOM(mountNode)
-        assertOuterHTML(mounted.getDOMNode, "<div>1 2 3</div>")
+        assertOuterHTML(mounted.getDOMNode.asMounted().asElement(), "<div>1 2 3</div>")
         assertUpdates()
 
         mounted = Comp(Props(1, 5, 8)).renderIntoDOM(mountNode)
-        assertOuterHTML(mounted.getDOMNode, "<div>1 5 8</div>")
+        assertOuterHTML(mounted.getDOMNode.asMounted().asElement(), "<div>1 5 8</div>")
         assertUpdates(Props(0, 3, 0))
 
         assertEq("willUnmountCount", willUnmountCount, 0)
@@ -185,15 +184,14 @@ object RawComponentEs6STest extends TestSuite {
   implicit val equalState: Equal[State] = Equal.equalA
   implicit val equalState2: Equal[State2] = Equal.equalA
 
-  @ScalaJSDefined
-  class RawComp(ctorProps: Box[Unit]) extends raw.ReactComponentEs6[Box[Unit], Box[State]] {
+  class RawComp(ctorProps: Box[Unit]) extends raw.React.Component[Box[Unit], Box[State]] {
     this.state = Box(State(123, State2(400, 7)))
     override def render() = {
       val s = this.state.unbox
       raw.React.createElement("div", null, "State = ", s.num1, " + ", s.s2.num2, " + ", s.s2.num3)
     }
     def inc(): Unit =
-      modState((s: State) => Box(s.unbox.copy(s.unbox.num1 + 1)))
+      modState((s: State, _: Props) => Box(s.unbox.copy(s.unbox.num1 + 1)): State | Null)
   }
   val RawCompCtor = js.constructorOf[RawComp]
   RawCompCtor.displayName = "State, no Props"
@@ -204,16 +202,16 @@ object RawComponentEs6STest extends TestSuite {
         .xmapState(_.unbox)(Box(_))
         .withRawType[RawComp]
 
-  override def tests = TestSuite {
+  override def tests = Tests {
 
-    'main {
+    "main" - {
       val unmounted = Component()
       assert(unmounted.propsChildren.isEmpty)
       assertEq(unmounted.key, None)
       assertEq(unmounted.ref, None)
       ReactTestUtils.withNewBodyElement { mountNode =>
         val mounted = unmounted.renderIntoDOM(mountNode)
-        val n = mounted.getDOMNode
+        val n = mounted.getDOMNode.asMounted().asElement()
 
         assertOuterHTML(n, "<div>State = 123 + 400 + 7</div>")
         // assertEq(mounted.isMounted, yesItsMounted)
@@ -245,7 +243,7 @@ object RawComponentEs6STest extends TestSuite {
       }
     }
 
-    'ctorReuse -
+    "ctorReuse" -
       assert(Component() eq Component())
 
   }

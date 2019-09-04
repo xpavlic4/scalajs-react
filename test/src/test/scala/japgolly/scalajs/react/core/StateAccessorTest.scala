@@ -1,6 +1,6 @@
 package japgolly.scalajs.react.core
 
-import utest._
+import utest.{test => _, _}
 import japgolly.scalajs.react._
 
 object StateAccessorTest extends TestSuite {
@@ -8,10 +8,10 @@ object StateAccessorTest extends TestSuite {
 
   type J = JS
 
-  override def tests = TestSuite {
+  override def tests = Tests {
 
-    'writePure {
-      def use[I, S](i: I)(implicit t: StateAccessor.WritePure[I, S]): S => Callback = t.setState(i)(_)
+    "writePure" - {
+      def use[I, S](i: I)(implicit t: StateAccessor.WritePure[I, S]): S => Callback = t(i).setState(_)
                        test[Render        ](use(_)).expect[S => Callback]
                        test[Backend       ](use(_)).expect[S => Callback]
                        test[ScalaMountedCB](use(_)).expect[S => Callback]
@@ -21,8 +21,8 @@ object StateAccessorTest extends TestSuite {
       compileError(""" test[StateAccessI  ](use(_)) """)
     }
 
-    'readIdWritePure {
-      def use[I, S](i: I)(implicit t: StateAccessor.ReadImpureWritePure[I, S]): CallbackTo[S] = t.setState(i)(t.state(i)).ret(t state i)
+    "readIdWritePure" - {
+      def use[I, S](i: I)(implicit t: StateAccessor.ReadImpureWritePure[I, S]): CallbackTo[S] = t(i).setState(t.state(i)).ret(t state i)
                        test[Render        ](use(_)).expect[CallbackTo[S]]
       compileError(""" test[StateAccessP  ](use(_)) """)
       compileError(""" test[StateAccessI  ](use(_)) """)
@@ -32,7 +32,7 @@ object StateAccessorTest extends TestSuite {
       compileError(""" test[ScalaMountedId](use(_)) """)
     }
 
-    'readCBWritePure {
+    "readCBWritePure" - {
       def use[I, S](i: I)(implicit sa: StateAccessor.ReadWritePure[I, S]): CallbackTo[S] = sa.state(i)
                        test[Backend       ](use(_)).expect[CallbackTo[S]]
                        test[ScalaMountedCB](use(_)).expect[CallbackTo[S]]
@@ -43,7 +43,7 @@ object StateAccessorTest extends TestSuite {
       compileError(""" test[StateAccessI  ](use(_)) """)
     }
 
-    'readIdWriteImpure {
+    "readIdWriteImpure" - {
       def use[I, S](i: I)(implicit sa: StateAccessor.ReadWriteImpure[I, S]): S = sa.state(i)
       compileError(""" test[Backend       ](use(_)) """)
       compileError(""" test[ScalaMountedCB](use(_)) """)

@@ -6,10 +6,12 @@ import scala.scalajs.js
 import scalaz.Equal
 import utest._
 import japgolly.scalajs.react.extra._
+import japgolly.scalajs.react.internal.JsUtil
 import japgolly.scalajs.react.test._
 import japgolly.scalajs.react.test.TestUtil._
 import japgolly.scalajs.react.vdom.html_<^._
 import MonocleReact._
+import scala.util.Try
 
 object MiscTest extends TestSuite {
 
@@ -27,30 +29,30 @@ object MiscTest extends TestSuite {
   val witnessOptionCallbackToCallback: Option[Callback] => Callback =
     _.getOrEmpty
 
-  override def tests = TestSuite {
+  override def tests = Tests {
 
-    'children {
-      'argsToComponents {
+    "children" - {
+      "argsToComponents" - {
 
-        'listOfScalatags - assertRender(
+        "listOfScalatags" - assertRender(
           CA(<.h1("nice"), <.h2("good")),
           "<div><h1>nice</h1><h2>good</h2></div>")
 
-        'listOfReactComponents - assertRender(
+        "listOfReactComponents" - assertRender(
           CA(CB(<.h1("nice")), CB(<.h2("good"))),
           "<div><span><h1>nice</h1></span><span><h2>good</h2></span></div>")
       }
 
-      'rendersGivenChildren {
-        'none - assertRender(CA(), "<div></div>")
-        'one - assertRender(CA(<.h1("yay")), "<div><h1>yay</h1></div>")
-        'two - assertRender(CA(<.h1("yay"), <.h3("good")), "<div><h1>yay</h1><h3>good</h3></div>")
-        'nested - assertRender(CA(CB(<.h1("nice"))), "<div><span><h1>nice</h1></span></div>")
+      "rendersGivenChildren" - {
+        "none" - assertRender(CA(), "<div></div>")
+        "one" - assertRender(CA(<.h1("yay")), "<div><h1>yay</h1></div>")
+        "two" - assertRender(CA(<.h1("yay"), <.h3("good")), "<div><h1>yay</h1><h3>good</h3></div>")
+        "nested" - assertRender(CA(CB(<.h1("nice"))), "<div><span><h1>nice</h1></span></div>")
       }
 
     }
 
-    'selectWithMultipleValues {
+    "selectWithMultipleValues" - {
       val s = ScalaComponent.builder[Unit]("s").renderStatic(
           <.select(^.multiple := true, ^.value := js.Array("a", "c"))(
             <.option(^.value := "a")("a"),
@@ -59,13 +61,13 @@ object MiscTest extends TestSuite {
         ).build
 
       val c = ReactTestUtils.renderIntoDocument(s())
-      val sel = c.getDOMNode.domCast[html.Select]
+      val sel = c.getDOMNode.asMounted().domCast[html.Select]
       val options = sel.options.asInstanceOf[js.Array[html.Option]] // https://github.com/scala-js/scala-js-dom/pull/107
       val selectedOptions = options filter (_.selected) map (_.value)
       assert(selectedOptions.toSet == Set("a", "c"))
     }
 
-    'renderScopeZoomState {
+    "renderScopeZoomState" - {
       case class SI(s: String, i: Int)
       val C = ScalaComponent.builder[SI]("C").initialStateFromProps(p => p).render { $ =>
         val f = $.mountedImpure.zoomState(_.i)(b => _.copy(i = b))
@@ -74,8 +76,8 @@ object MiscTest extends TestSuite {
       assertRender(C(SI("Me",7)), "<div>Me/21</div>")
     }
 
-    'multiModState {
-      'simple {
+    "multiModState" - {
+      "simple" - {
         val C = ScalaComponent.builder[Unit]("multiModState")
           .initialState(3)
           .render { $ =>
@@ -90,7 +92,7 @@ object MiscTest extends TestSuite {
         assertEq(c.state, 11)
       }
 
-      'zoomState {
+      "zoomState" - {
         val C = ScalaComponent.builder[Unit]("multiModState")
           .initialState(StrInt("yay", 3))
           .render { $ =>
@@ -109,7 +111,7 @@ object MiscTest extends TestSuite {
         assertEq(c.state, StrInt("oh", 108))
       }
 
-      'zoomStateL {
+      "zoomStateL" - {
         val C = ScalaComponent.builder[Unit]("multiModState")
           .initialState(StrInt("yay", 3))
           .render { $ =>
@@ -128,7 +130,7 @@ object MiscTest extends TestSuite {
         assertEq(c.state, StrInt("oh", 108))
       }
 
-      'zoomStateL2 {
+      "zoomStateL2" - {
         val C = ScalaComponent.builder[Unit]("multiModState")
           .initialState(StrIntWrap(StrInt("yay", 3)))
           .render { $ =>
@@ -148,52 +150,30 @@ object MiscTest extends TestSuite {
       }
     }
 
-    'domExt {
+    "domExt" - {
       import org.scalajs.dom.raw._
       import InferenceUtil._
-      'domCast   - test[Node](_.domCast[HTMLInputElement]).expect[HTMLInputElement]
-      'domAsHtml - test[Node](_.domAsHtml).expect[HTMLElement]
-      'domToHtml {
+      "domCast"   - test[Node](_.domCast[HTMLInputElement]).expect[HTMLInputElement]
+      "domAsHtml" - test[Node](_.domAsHtml).expect[HTMLElement]
+      "domToHtml" - {
         import org.scalajs.dom._
         val input = document.createElement("input")
         assert(input.domToHtml == Option(input.asInstanceOf[HTMLElement]))
       }
     }
 
-    /*
-    'future {
-      val X = ScalaComponent.builder[Unit]("X")
-        .initialState(1)
-        .render_S(s => <.div("state = ", s))
-        .build
+    "strictMode" -
+      assertRender(
+        React.StrictMode(CA(<.h2("nice"), <.h3("good"))),
+        "<div><h2>nice</h2><h3>good</h3></div>")
 
-      val x = ReactTestUtils renderIntoDocument X()
-
-      'direct {
-        var i = 10
-        val ff = x.future.modState(_ + 1, Callback(i -= 7))
-        val f: Future[Unit] = ff
-        f.map { _ =>
-          assert(x.state == 2)
-          assert(i == 3)
-        }
-      }
-
-      'callback {
-        var i = 90
-        val cbb = x.accessCB.future.modState(_ + 1, Callback(i -= 5))
-        val cb: CallbackTo[Future[Unit]] = cbb
-        // Look, it's repeatable
-        for {
-          _ <- cb.runNow()
-          _ <- cb.runNow()
-        } yield {
-          assert(x.state == 3)
-          assert(i == 80)
-        }
+    "symbolShouldntCrashToString" - {
+      for (s <- List(js.Symbol.search, js.Symbol.forKey("ah"))) {
+        JsUtil.inspectValue(s)
+        JsUtil.safeToString(s)
+        Try(JsComponent[Null, Children.None, Null](s))
+        Try(JsFnComponent[Null, Children.None](s))
       }
     }
-    */
-
   }
 }

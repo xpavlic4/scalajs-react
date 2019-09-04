@@ -25,7 +25,7 @@ trait TimerSupport extends OnUnmount {
   final def setTimeoutMs(f: Callback, timeoutInMilliseconds: Double): Callback = {
     CallbackTo {
       var handle: UndefOr[SetTimeoutHandle] = undefined
-      val proc = f << Callback(handle = undefined)
+      val proc = f << Callback { handle = undefined }
       handle = RawTimers.setTimeout(proc.toJsFn, timeoutInMilliseconds)
       Callback(handle foreach RawTimers.clearTimeout)
     } flatMap onUnmount
@@ -53,6 +53,6 @@ trait TimerSupport extends OnUnmount {
 }
 
 object TimerSupport {
-  @inline def install[P, C <: Children, S, B <: TimerSupport]: ScalaComponent.Config[P, C, S, B] =
+  @inline def install[P, C <: Children, S, B <: TimerSupport, U <: UpdateSnapshot]: ScalaComponent.Config[P, C, S, B, U, U] =
     OnUnmount.install
 }

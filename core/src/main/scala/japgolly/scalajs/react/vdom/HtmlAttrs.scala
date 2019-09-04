@@ -219,21 +219,73 @@ trait HtmlAttrs {
     final def valueText = VdomAttr("aria-valuetext")
   }
 
-  final def async = VdomAttr("async")
+  final def async = VdomAttr[Boolean]("async")
 
   final def autoCapitalize = VdomAttr("autoCapitalize")
 
-  /**
-    * This attribute indicates whether the value of the control can be
+  /** This attribute indicates whether the value of the control can be
     * automatically completed by the browser. This attribute is ignored if the
     * value of the type attribute is hidden, checkbox, radio, file, or a button
     * type (button, submit, reset, image).
-    *
-    * Possible values are "off" and "on"
     */
-  object autoComplete extends VdomAttr.Generic("autoComplete") {
-    def on  = this := "on"
-    def off = this := "off"
+  final object autoComplete extends VdomAttr.Generic("autoComplete") {
+    def additionalName      = this := "additional-name"
+    def addressLevel1       = this := "address-level1"
+    def addressLevel2       = this := "address-level2"
+    def addressLevel3       = this := "address-level3"
+    def addressLevel4       = this := "address-level4"
+    def addressLine1        = this := "address-line1"
+    def addressLine2        = this := "address-line2"
+    def addressLine3        = this := "address-line3"
+    def bday                = this := "bday"
+    def bdayDay             = this := "bday-day"
+    def bdayMonth           = this := "bday-month"
+    def bdayYear            = this := "bday-year"
+    def ccAdditionalName    = this := "cc-additional-name"
+    def ccCsc               = this := "cc-csc"
+    def ccExp               = this := "cc-exp"
+    def ccExpMonth          = this := "cc-exp-month"
+    def ccExpYear           = this := "cc-exp-year"
+    def ccFamilyName        = this := "cc-family-name"
+    def ccGivenName         = this := "cc-given-name"
+    def ccName              = this := "cc-name"
+    def ccNumber            = this := "cc-number"
+    def ccType              = this := "cc-type"
+    def country             = this := "country"
+    def countryName         = this := "country-name"
+    def currentPassword     = this := "current-password"
+    def email               = this := "email"
+    def familyName          = this := "family-name"
+    def givenName           = this := "given-name"
+    def honorificPrefix     = this := "honorific-prefix"
+    def honorificSuffix     = this := "honorific-suffix"
+    def impp                = this := "impp"
+    def language            = this := "language"
+    def name                = this := "name"
+    def newPassword         = this := "new-password"
+    def nickname            = this := "nickname"
+    def off                 = this := "off"
+    def on                  = this := "on"
+    def oneTimeCode         = this := "one-time-code"
+    def organization        = this := "organization"
+    def organizationTitle   = this := "organization-title"
+    def photo               = this := "photo"
+    def postalCode          = this := "postal-code"
+    def sex                 = this := "sex"
+    def streetAddress       = this := "street-address"
+    def tel                 = this := "tel"
+    def telAreaCode         = this := "tel-area-code"
+    def telCountryCode      = this := "tel-country-code"
+    def telExtension        = this := "tel-extension"
+    def telLocal            = this := "tel-local"
+    def telLocalPrefix      = this := "tel-local-prefix"
+    def telLocalSuffix      = this := "tel-local-suffix"
+    def telNational         = this := "tel-national"
+    def transactionAmount   = this := "transaction-amount"
+    def transactionCurrency = this := "transaction-currency"
+    def url                 = this := "url"
+    def username            = this := "username"
+    def usernameEmail       = this := "username email"
   }
 
   final def autoCorrect = VdomAttr[Boolean]("autoCorrect")
@@ -291,18 +343,18 @@ trait HtmlAttrs {
   private def classSetImpl(z: TagMod, ps: Seq[(String, Boolean)]): TagMod =
     ps.foldLeft(z)((q, p) =>
       if (p._2)
-        q(cls := p._1)
+        TagMod(q, cls := p._1)
       else
         q)
 
   final def classSet(ps: (String, Boolean)*): TagMod =
-    classSetImpl(EmptyVdom, ps)
+    classSetImpl(TagMod.empty, ps)
 
   final def classSet1(a: String, ps: (String, Boolean)*): TagMod =
     classSetImpl(cls := a, ps)
 
   final def classSetM(ps: Map[String, Boolean]): TagMod =
-    classSetImpl(EmptyVdom, ps.toSeq)
+    classSetImpl(TagMod.empty, ps.toSeq)
 
   final def classSet1M(a: String, ps: Map[String, Boolean]): TagMod =
     classSetImpl(cls := a, ps.toSeq)
@@ -313,6 +365,7 @@ trait HtmlAttrs {
     * default value is 20 (HTML5).
     */
   final def cols = VdomAttr("cols")
+
   /**
     * This attribute gives the value associated with the http-equiv or name
     * attribute, depending of the context.
@@ -323,7 +376,7 @@ trait HtmlAttrs {
 
   final def contextMenu = VdomAttr("contextMenu")
 
-  final def controls = VdomAttr("controls")
+  final def controls = VdomAttr[Boolean]("controls")
 
   final def coords = VdomAttr("coords")
 
@@ -333,11 +386,11 @@ trait HtmlAttrs {
 
   final def dateTime = VdomAttr("dateTime")
 
-  final def default = VdomAttr("default")
+  final def default = VdomAttr[Boolean]("default")
 
   final def defaultValue = VdomAttr("defaultValue")
 
-  final def defer = VdomAttr("defer")
+  final def defer = VdomAttr[Boolean]("defer")
 
   final def dir = VdomAttr("dir")
 
@@ -362,6 +415,11 @@ trait HtmlAttrs {
     * elements.
     */
   final def `for` = VdomAttr("htmlFor")
+    
+  /**
+    * Allows association of an input to a non-ancestoral form.
+    */
+  final def formId = VdomAttr("form")
 
   final def formAction = VdomAttr("formAction")
 
@@ -369,13 +427,15 @@ trait HtmlAttrs {
 
   final def formMethod = VdomAttr("formMethod")
 
-  final def formNoValidate = VdomAttr("formNoValidate")
+  final def formNoValidate = VdomAttr[Boolean]("formNoValidate")
 
   final def formTarget = VdomAttr("formTarget")
 
   final def frameBorder = VdomAttr("frameBorder")
 
   final def headers = VdomAttr("headers")
+
+  final def hidden = VdomAttr[Boolean]("hidden")
 
   /**
     * For use in &lt;meter&gt; tags.
@@ -436,7 +496,7 @@ trait HtmlAttrs {
 
   final def itemProp = VdomAttr("itemProp")
 
-  final def itemScope = VdomAttr("itemScope")
+  final def itemScope = VdomAttr[Boolean]("itemScope")
 
   final def itemType = VdomAttr("itemType")
 
@@ -464,7 +524,7 @@ trait HtmlAttrs {
 
   final def list = VdomAttr("list")
 
-  final def loop = VdomAttr("loop")
+  final def loop = VdomAttr[Boolean]("loop")
 
   /**
     * For use in &lt;meter&gt; tags.
@@ -486,7 +546,7 @@ trait HtmlAttrs {
     */
   final def max = VdomAttr("max")
 
-  final def maxLength = VdomAttr("maxLength")
+  final def maxLength = VdomAttr[Int]("maxLength")
 
   /**
     * This attribute specifies the media which the linked resource applies to.
@@ -523,11 +583,11 @@ trait HtmlAttrs {
     */
   final def min = VdomAttr("min")
 
-  final def minLength = VdomAttr("minLength")
+  final def minLength = VdomAttr[Int]("minLength")
 
-  final def multiple = VdomAttr("multiple")
+  final def multiple = VdomAttr[Boolean]("multiple")
 
-  final def muted = VdomAttr("muted")
+  final def muted = VdomAttr[Boolean]("muted")
 
   /**
     * On form elements (input etc.):
@@ -541,10 +601,26 @@ trait HtmlAttrs {
     */
   final def name = VdomAttr[String]("name")
 
-  final def noValidate = VdomAttr("noValidate")
+  final def noModule = VdomAttr[Boolean]("noModule")
+
+  final def noValidate = VdomAttr[Boolean]("noValidate")
 
   /** For &lt;script&gt; and &lt;style&gt;elements. */
   final def nonce = VdomAttr("nonce")
+
+  /** 'on' attribute for amp tags.
+    *
+    * The on attribute is used to install event handlers on elements. The events that are supported depend on the element.
+    *
+    * The value for the syntax is a simple domain specific language of the form:
+    *
+    * {{{
+    *   eventName:targetId[.methodName[(arg1=value, arg2=value)]]
+    * }}}
+    *
+    * @see https://www.ampproject.org/docs/reference/spec#on
+    */
+  final def on = VdomAttr("on")
 
   final def onAbort = Attr.Event.base("onAbort")
 
@@ -561,6 +637,10 @@ trait HtmlAttrs {
   final def onAnimationStart = Attr.Event.animation("onAnimationStart")
 
   final def onAnimationStartCapture = Attr.Event.animation("onAnimationStartCapture")
+
+  final def onAuxClick = Attr.Event.mouse("onAuxClick")
+
+  final def onAuxClickCapture = Attr.Event("onAuxClickCapture")
 
   final def onBeforeInput = Attr.Event.base("onBeforeInput")
 
@@ -806,6 +886,100 @@ trait HtmlAttrs {
 
   final def onPlayingCapture = Attr.Event.base("onPlayingCapture")
 
+  /** A user agent MUST fire a pointer event named gotpointercapture when an element receives pointer capture. This event is fired at the element that is receiving pointer capture. Subsequent events for that pointer will be fired at this element.
+    *
+    * @since 1.3.0 / React 16.4.0
+    */
+  final def onGotPointerCapture = Attr.Event.pointer("onGotPointerCapture")
+
+  /** A user agent MUST fire a pointer event named lostpointercapture after pointer capture is released for a pointer. This event MUST be fired prior to any subsequent events for the pointer after capture was released. This event is fired at the element from which pointer capture was removed. Subsequent events for the pointer follow normal hit testing mechanisms (out of scope for this specification) for determining the event target.
+    *
+    * @since 1.3.0 / React 16.4.0
+    */
+  final def onLostPointerCapture = Attr.Event.pointer("onLostPointerCapture")
+
+  /** A user agent MUST fire a pointer event named pointercancel in the following circumstances:
+    *
+    *   - The user agent has determined that a pointer is unlikely to continue to produce events (for example, because of a hardware event).
+    *
+    *   - After having fired the pointerdown event, if the pointer is subsequently used to manipulate the page viewport (e.g. panning or zooming).
+    *     NOTE: User agents can trigger panning or zooming through multiple pointer types (such as touch and pen), and therefore the start of a pan or zoom action may result in the cancellation of various pointers, including pointers with different pointer types.
+    *
+    *   - Immediately before drag operation starts [HTML], for the pointer that caused the drag operation.
+    *     NOTE: If the start of the drag operation is prevented through any means (e.g. through calling preventDefault on the dragstart event) there will be no pointercancel event.
+    *
+    * After firing the pointercancel event, a user agent MUST also fire a pointer event named pointerout followed by firing a pointer event named pointerleave.
+    *
+    * NOTE: This section is non-normative. Examples of scenarios in which a user agent might determine that a pointer is unlikely to continue to produce events include:
+    *   - A device's screen orientation is changed while a pointer is active.
+    *   - The user inputs a greater number of simultaneous pointers than is supported by the device.
+    *   - The user agent interprets the input as accidental (for example, the hardware supports palm rejection).
+    *   - The user agent interprets the input as a pan or zoom gesture.
+    * Methods for changing the device's screen orientation, recognizing accidental input, or using a pointer to manipulate the viewport (e.g. panning or zooming) are out of scope for this specification.
+    *
+    * @since 1.3.0 / React 16.4.0
+    */
+  final def onPointerCancel = Attr.Event.pointer("onPointerCancel")
+
+  /** A user agent MUST fire a pointer event named pointerdown when a pointer enters the active buttons state. For mouse, this is when the device transitions from no buttons depressed to at least one button depressed. For touch, this is when physical contact is made with the digitizer. For pen, this is when the pen either makes physical contact with the digitizer without any button depressed, or transitions from no buttons depressed to at least one button depressed while hovering.
+    *
+    * NOTE: For mouse (or other multi-button pointer devices), this means pointerdown and pointerup are not fired for all of the same circumstances as mousedown and mouseup. See chorded buttons for more information.
+    *
+    * For input devices that do not support hover, a user agent MUST also fire a pointer event named pointerover followed by a pointer event named pointerenter prior to dispatching the pointerdown event.
+    *
+    * NOTE: Authors can prevent the firing of certain compatibility mouse events by canceling the pointerdown event (if the isPrimary property is true). This sets the PREVENT MOUSE EVENT flag on the pointer. Note, however, that this does not prevent the mouseover, mouseenter, mouseout, or mouseleave events from firing.
+    *
+    * @since 1.3.0 / React 16.4.0
+    */
+  final def onPointerDown = Attr.Event.pointer("onPointerDown")
+
+  /** A user agent MUST fire a pointer event named pointerenter when a pointing device is moved into the hit test boundaries of an element or one of its descendants, including as a result of a pointerdown event from a device that does not support hover (see pointerdown). Note that setPointerCapture or releasePointerCapture might have changed the hit test target and while a pointer is captured it is considered to be always inside the boundaries of the capturing element for the purpose of firing boundary events. This event type is similar to pointerover, but differs in that it does not bubble.
+    *
+    * @since 1.3.0 / React 16.4.0
+    */
+  final def onPointerEnter = Attr.Event.pointer("onPointerEnter")
+
+  /** A user agent MUST fire a pointer event named pointerleave when a pointing device is moved out of the hit test boundaries of an element and all of its descendants, including as a result of a pointerup and pointercancel events from a device that does not support hover (see pointerup and pointercancel). Note that setPointerCapture or releasePointerCapture might have changed the hit test target and while a pointer is captured it is considered to be always inside the boundaries of the capturing element for the purpose of firing boundary events. User agents MUST also fire a pointer event named pointerleave when a pen stylus leaves hover range detectable by the digitizer. This event type is similar to pointerout, but differs in that it does not bubble and that it MUST not be fired until the pointing device has left the boundaries of the element and the boundaries of all of its descendants.
+    *
+    * NOTE: There are similarities between this event type, the mouseleave event described in [UIEVENTS], and the CSS :hover pseudo-class described in [CSS21]. See also the pointerenter event.
+    *
+    * @since 1.3.0 / React 16.4.0
+    */
+  final def onPointerLeave = Attr.Event.pointer("onPointerLeave")
+
+  /** A user agent MUST fire a pointer event named pointermove when a pointer changes coordinates. Additionally, when a pointer changes button state, pressure, tangential pressure, tilt, twist, or contact geometry (e.g. width and height) and the circumstances produce no other pointer events defined in this specification then a user agent MUST fire a pointer event named pointermove.
+    *
+    * @since 1.3.0 / React 16.4.0
+    */
+  final def onPointerMove = Attr.Event.pointer("onPointerMove")
+
+  /** A user agent MUST fire a pointer event named pointerout when any of the following occurs:
+    *
+    *   - A pointing device is moved out of the hit test boundaries of an element. Note that setPointerCapture or releasePointerCapture might have changed the hit test target and while a pointer is captured it is considered to be always inside the boundaries of the capturing element for the purpose of firing boundary events.
+    *   - After firing the pointerup event for a device that does not support hover (see pointerup).
+    *   - After firing the pointercancel event (see pointercancel).
+    *   - When a pen stylus leaves the hover range detectable by the digitizer.
+    *
+    * @since 1.3.0 / React 16.4.0
+    */
+  final def onPointerOut = Attr.Event.pointer("onPointerOut")
+
+  /** A user agent MUST fire a pointer event named pointerover when a pointing device is moved into the hit test boundaries of an element. Note that setPointerCapture or releasePointerCapture might have changed the hit test target and while a pointer is captured it is considered to be always inside the boundaries of the capturing element for the purpose of firing boundary events. A user agent MUST also fire this event prior to firing a pointerdown event for devices that do not support hover (see pointerdown).
+    *
+    * @since 1.3.0 / React 16.4.0
+    */
+  final def onPointerOver = Attr.Event.pointer("onPointerOver")
+
+  /** A user agent MUST fire a pointer event named pointerup when a pointer leaves the active buttons state. For mouse, this is when the device transitions from at least one button depressed to no buttons depressed. For touch, this is when physical contact is removed from the digitizer. For pen, this is when the pen is removed from the physical contact with the digitizer while no button is depressed, or transitions from at least one button depressed to no buttons depressed while hovering.
+    *
+    * For input devices that do not support hover, a user agent MUST also fire a pointer event named pointerout followed by a pointer event named pointerleave after dispatching the pointerup event.
+    *
+    * NOTE: For mouse (or other multi-button pointer devices), this means pointerdown and pointerup are not fired for all of the same circumstances as mousedown and mouseup. See chorded buttons for more information.
+    *
+    * @since 1.3.0 / React 16.4.0
+    */
+  final def onPointerUp = Attr.Event.pointer("onPointerUp")
+
   final def onProgress = Attr.Event.base("onProgress")
 
   final def onProgressCapture = Attr.Event.base("onProgressCapture")
@@ -910,7 +1084,7 @@ trait HtmlAttrs {
 
   final def onWheelCapture = Attr.Event.wheel("onWheelCapture")
 
-  final def open = VdomAttr("open")
+  final def open = VdomAttr[Boolean]("open")
 
   /**
     * For use in &lt;meter&gt; tags.
@@ -919,6 +1093,13 @@ trait HtmlAttrs {
     */
   final def optimum = VdomAttr("optimum")
 
+  /** The pattern attribute specifies a regular expression against which the control’s value, or, when the multiple
+    * attribute applies and is set, the control’s values, are to be checked.
+    *
+    * @see https://www.w3.org/TR/html5/sec-forms.html#the-pattern-attribute
+    */
+  final def pattern = VdomAttr[String]("pattern")
+
   /**
     * A hint to the user of what can be entered in the control. The placeholder
     * text must not contain carriage returns or line-feeds. This attribute
@@ -926,6 +1107,8 @@ trait HtmlAttrs {
     * email; otherwise it is ignored.
     */
   final def placeholder = VdomAttr("placeholder")
+
+  final def playsInline = VdomAttr[Boolean]("playsInline")
 
   final def poster = VdomAttr("poster")
 
@@ -963,7 +1146,7 @@ trait HtmlAttrs {
   final def results = VdomAttr("results")
 
   /** For &lt;ol&gt; elements. */
-  final def reversed = VdomAttr("reversed")
+  final def reversed = VdomAttr[Boolean]("reversed")
 
   /**
     * The attribute describes the role(s) the current element plays in the
@@ -999,15 +1182,15 @@ trait HtmlAttrs {
     * If this attribute is present, then the style applies only to its parent element.
     * If absent, the style applies to the whole document.
     */
-  final def scoped = VdomAttr("scoped")
+  final def scoped = VdomAttr[Boolean]("scoped")
 
   final def scrolling = VdomAttr("scrolling")
 
-  final def seamless = VdomAttr("seamless")
+  final def seamless = VdomAttr[Boolean]("seamless")
 
   final def security = VdomAttr("security")
 
-  final def selected = VdomAttr("selected")
+  final def selected = VdomAttr[Boolean]("selected")
 
   final def shape = VdomAttr("shape")
 

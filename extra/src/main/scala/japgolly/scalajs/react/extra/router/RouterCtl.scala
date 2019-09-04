@@ -1,7 +1,6 @@
 package japgolly.scalajs.react.extra.router
 
 import japgolly.scalajs.react._
-import japgolly.scalajs.react.extra.Reusability
 import japgolly.scalajs.react.vdom.html_<^._
 import org.scalajs.dom.html
 
@@ -21,7 +20,7 @@ abstract class RouterCtl[A] {
     pathFor(target).abs(baseUrl)
 
   final def setEH(target: A): ReactEvent => Callback =
-    e => CallbackOption.asEventDefault(e, set(target))
+    e => set(target).asEventDefault(e).void
 
   final def setOnClick(target: A): TagMod =
     ^.onClick ==> setEH(target)

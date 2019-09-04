@@ -5,22 +5,36 @@ This describes the smaller utilities in the `extra` module.
 Find links to the larger utilities from the [main README](../README.md).
 
 ```scala
-libraryDependencies += "com.github.japgolly.scalajs-react" %%% "extra" % "1.0.1"
+libraryDependencies += "com.github.japgolly.scalajs-react" %%% "extra" % "1.4.2"
 ```
 
 #### Contents
 
+- [`Ajax`](#ajax)
 - [`StateSnapshot`](#statesnapshot)
 - Component Mixins:
   - [Broadcaster and Listenable](#broadcaster-and-listenable)
   - [EventListener](#eventlistener)
-  - [LogLifecycle](#loglifecycle)
   - [OnUnmount](#onunmount)
   - [TimerSupport](#timersupport)
+
+<br>
+
+`Ajax`
+======
+
+`japgolly.scalajs.react.extra.Ajax` is a helper for AJAX that is purely-functional
+in that it runs a `Callback`, and accepts XHR-callbacks as `Callback` instances.
+
+Live demos with accompanying code are available here:
+
+* [https://japgolly.github.io/scalajs-react/#examples/ajax-1](https://japgolly.github.io/scalajs-react/#examples/ajax-1)
+* [https://japgolly.github.io/scalajs-react/#examples/ajax-2](https://japgolly.github.io/scalajs-react/#examples/ajax-2)
 
 
 `StateSnapshot`
 ===============
+
 Consider:
 1. React has unidirectional flow (yay) and pure render methods (yay!).
 2. Stateful components are like mutable variables, stateless components are like immutable values.
@@ -29,11 +43,13 @@ Consider:
 How does one write components that appear stateful yet maintain referential-transparency?
 By declaring the following in the component's props:
 1. `S` - The current state value to use in the view.
-2. `S => Callback` - A function that accepts a new state and returns a `Callack`.
+2. `(Option[S], Callback) => Callback` - A function that accepts `setState` arguments
+  (namely: an optional new state, and a callback for React to execute once the new state has been applied),
+  and returns a `Callback`.
   The component calls this to request a new state be recorded and then just assumes that the function does something
   meaningful. This is great because no assumptions about the larger context are encoded; it has just enough to do its job.
 
-`StateSnapshot[S]` encapsulates this `(S, S => Callback)` pattern.
+`StateSnapshot[S]` encapsulates this `(S, (Option[S], Callback) => Callback)` pattern.
 It's called StateSnapshot because it takes a snapshot of state at its current value.
 It also supports optional [`Reusability`](PERFORMANCE.md).
 
@@ -47,8 +63,7 @@ Construction:
   * `StateSnapshot.zoom(…)(s).setStateVia($)`
   * `StateSnapshot.zoom(…).of($)`
 
-A live demo with accompanying code is available here:
-
+A live demo with accompanying code is available here:<br>
 https://japgolly.github.io/scalajs-react/#examples/state-snapshot
 
 
@@ -84,44 +99,8 @@ EventListener
 * Uninstalls event listeners when component is unmounted.
 * By default, listens to the component node's events. Can specify other event targets (eg. `window`, `document`)
 
-A live demo with accompanying code is available here:
-
+A live demo with accompanying code is available here:<br>
 https://japgolly.github.io/scalajs-react/#examples/event-listener
-
-
-LogLifecycle
-============
-This will cause logging to occur at React component lifecycle stages.
-
-##### Usage
-```scala
-val component = ScalaComponent.builder[...]
-  ...
-  .configure(LogLifecycle.short)   // Logs the component name and stage
-  .configure(LogLifecycle.default) // Logs the component name, stage and the props/state
-  .configure(LogLifecycle.verbose) // Logs everything in the world
-  ...
-```
-
-##### Example output
-```
-[DragAndDrop Demo] componentWillMount
-  Constructor {props: Object, _owner: Constructor, _lifeCycleState: "MOUNTED", _pendingCallbacks: null, _currentElement: ReactElement…}
-
-[DragAndDrop Demo] componentDidMount
-  Constructor {props: Object, _owner: Constructor, _lifeCycleState: "MOUNTED", _pendingCallbacks: null, _currentElement: ReactElement…}
-
-[DragAndDrop Demo] componentWillUpdate
-  Constructor {props: Object, _owner: Constructor, _lifeCycleState: "MOUNTED", _pendingCallbacks: null, _currentElement: ReactElement…}
-  Props: List(Item(10,Ten), Item(20,Two Zero), Item(30,Firty), Item(40,Thorty), Item(50,Fipty))
-  State: ParentState(List(Item(10,Ten), Item(20,Two Zero), Item(30,Firty), Item(40,Thorty), Item(50,Fipty)),Started(Item(50,Fipty)),0)
-
-[DragAndDrop Demo] componentDidUpdate
-  Constructor {props: Object, _owner: Constructor, _lifeCycleState: "MOUNTED", _pendingCallbacks: null, _currentElement: ReactElement…}
-  Props: List(Item(10,Ten), Item(20,Two Zero), Item(30,Firty), Item(40,Thorty), Item(50,Fipty))
-  State: ParentState(List(Item(10,Ten), Item(20,Two Zero), Item(30,Firty), Item(40,Thorty), Item(50,Fipty)),Inactive,0)
-```
-
 
 OnUnmount
 =========

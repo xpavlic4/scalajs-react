@@ -1,11 +1,9 @@
 package japgolly.scalajs.react.component
 
-import org.scalajs.dom
 import scala.scalajs.js
 import japgolly.scalajs.react.internal._
-import japgolly.scalajs.react.vdom
+import japgolly.scalajs.react.{Callback, CallbackTo, CtorType, ComponentDom, Key, PropsChildren, StateAccess, vdom}
 import japgolly.scalajs.react.{raw => RAW}
-import japgolly.scalajs.react.{Callback, CallbackTo, CtorType, Key, PropsChildren, StateAccess}
 
 object Generic {
 
@@ -16,6 +14,7 @@ object Generic {
     type Raw <: js.Any
     val raw: Raw
     def displayName: String
+    def mapRaw(f: Raw => Raw): ComponentRaw
   }
 
   trait ComponentSimple[P, CT[-p, +u] <: CtorType[p, u], U] extends ComponentRaw {
@@ -28,12 +27,24 @@ object Generic {
 
     val ctor: CT[P, U]
     implicit def ctorPF: Profunctor[CT]
+
+    override def mapRaw(f: Raw => Raw): ComponentSimple[P, CT, U]
+
+    /** Create a new JS component that wraps this component and its mappings.
+      *
+      * The props either need to be a subtype of js.Object, or a known singleton like Unit or Null.
+      */
+    final def toJsComponent(implicit c: JsFn.ToRawCtor[P, ctor.ChildrenType], r: JsFn.ToRawReactElement[U]): JsFn.Component[c.JS, c.cts.CT] =
+      JsFn.fromJsFn[c.JS, ctor.ChildrenType]((p: c.JS with RAW.PropsWithChildren) =>
+        r.run(ctor.applyGeneric(c(p))(ctor.liftChildren(p.children): _*))
+      )(c.cts)
   }
 
   trait ComponentWithRoot[P1, CT1[-p, +u] <: CtorType[p, u], U1, P0, CT0[-p, +u] <: CtorType[p, u], U0] extends ComponentSimple[P1, CT1, U1] {
     type Root <: ComponentRoot[P0, CT0, U0]
     def root: Root
 
+    override def mapRaw(f: Raw => Raw): ComponentWithRoot[P1, CT1, U1, P0, CT0, U0]
     override def cmapCtorProps[P2](f: P2 => P1): ComponentWithRoot[P2, CT1, U1, P0, CT0, U0]
     override def mapUnmounted[U2](f: U1 => U2): ComponentWithRoot[P1, CT1, U2, P0, CT0, U0]
     override def mapCtorType[CT2[-p, +u] <: CtorType[p, u]](f: CT1[P1, U1] => CT2[P1, U1])(implicit pf: Profunctor[CT2]): ComponentWithRoot[P1, CT2, U1, P0, CT0, U0]
@@ -46,25 +57,31 @@ object Generic {
   type Unmounted[P, M] = UnmountedSimple[P, M]
 
   trait UnmountedRaw {
-    type Raw <: RAW.ReactElement
+    type Raw <: RAW.React.Element
     val raw: Raw
     def displayName: String
+
+    final def vdomElement: vdom.VdomElement =
+      vdom.VdomElement(raw)
   }
+
+  implicit def unmountedRawToVdomElement(u: UnmountedRaw): vdom.VdomElement =
+    u.vdomElement
 
   trait UnmountedSimple[P, M] extends UnmountedRaw {
     final type Props = P
     final type Mounted = M
+    type Ref
 
     def mapUnmountedProps[P2](f: P => P2): UnmountedSimple[P2, M]
     def mapMounted[M2](f: M => M2): UnmountedSimple[P, M2]
 
-    def vdomElement: vdom.VdomElement
     def key: Option[Key]
-    def ref: Option[String]
+    def ref: Option[Ref]
     def props: Props
     def propsChildren: PropsChildren
 
-    val mountRaw: RAW.ReactComponentUntyped => M
+    val mountRaw: RAW.React.ComponentUntyped => M // TODO Do better
 
     def renderIntoDOM(container: RAW.ReactDOM.Container, callback: Callback = Callback.empty): Mounted =
       mountRaw(RAW.ReactDOM.render(raw, container, callback.toJsFn))
@@ -87,12 +104,12 @@ object Generic {
   type MountedImpure[P, S] = MountedSimple[Effect.Id, P, S]
 
   trait MountedRaw {
-    type Raw <: RAW.ReactComponentUntyped
+    type Raw <: RAW.React.ComponentUntyped // TODO Do better
     val raw: Raw
     def displayName: String
   }
 
-  trait MountedSimple[F[_], P, S] extends MountedRaw with StateAccess[F, S] {
+  trait MountedSimple[F[_], P, S] extends MountedRaw with StateAccess[F, S] with StateAccess.WriteWithProps[F, P, S] {
     final type Props = P
 
     override type WithEffect[F2[_]]   <: MountedSimple[F2, P, S]
@@ -100,10 +117,7 @@ object Generic {
              type WithMappedProps[P2] <: MountedSimple[F, P2, S]
     def mapProps[P2](f: P => P2): WithMappedProps[P2]
 
-    /** Not all components support this; ES6 classes don't. */
-    def isMounted: F[Option[Boolean]]
-
-    def getDOMNode: F[dom.Element]
+    def getDOMNode: F[ComponentDom]
     def props: F[Props]
     def propsChildren: F[PropsChildren]
 

@@ -1,44 +1,39 @@
 package japgolly.scalajs.react
 
-import org.scalajs.dom
+import japgolly.scalajs.react.internal.NotAllowed
 import japgolly.scalajs.react.vdom.VdomElement
+import japgolly.scalajs.react.{raw => Raw}
+import org.scalajs.dom
+import scala.scalajs.js.|
 
 object ReactDOM {
-  def raw = japgolly.scalajs.react.raw.ReactDOM
+  def raw = Raw.ReactDOM
+
+  /** For mounted components, use .getDOMNode */
+  def findDOMNode(componentOrElement: dom.Element | Raw.React.ComponentUntyped): Option[ComponentDom.Mounted] =
+    ComponentDom.findDOMNode(componentOrElement).mounted
+
+  def hydrate(element  : VdomElement,
+              container: Raw.ReactDOM.Container,
+              callback: Callback = Callback.empty): Raw.React.ComponentUntyped =
+    Raw.ReactDOM.hydrate(element.rawElement, container, callback.toJsFn)
 
   def unmountComponentAtNode(container: dom.Node): Boolean =
     raw.unmountComponentAtNode(container)
 
+  // .hydrate is not here because currently, SSR with scalajs-react isn't directly supported.
+  // .raw.hydrate can be used if needed.
+
+  // There are three ways of providing this functionality:
+  // 1. ReactDOM.render here (problem: lose return type precision)
+  // 2. ReactDOM.render{Js,Scala,Vdom,etc}
+  // 3. Add .renderIntoDOM to mountable types (current solution)
   @deprecated("Use .renderIntoDOM on unmounted components.", "")
-  def render(element  : Nothing,
-             container: Nothing,
-             callback : Any = null): Null = null
+  def render(element  : NotAllowed,
+             container: Any,
+             callback : Any = null) = NotAllowed.body
 
-  @deprecated("Use .getDOMNode on mounted components.", "")
-  def findDOMNode(comonent: Nothing): Null = null
-}
+  @deprecated("Import vdom and use ReactPortal()", "")
+  def createPortal(child: NotAllowed, container: Any) = NotAllowed.body
 
-// ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-
-object ReactDOMServer {
-  def raw = japgolly.scalajs.react.raw.ReactDOMServer
-
-  /**
-    * Render a ReactElement to its initial HTML. This should only be used on the server. React will return an HTML
-    * string. You can use this method to generate HTML on the server and send the markup down on the initial request for
-    * faster page loads and to allow search engines to crawl your pages for SEO purposes.
-    *
-    * If you call `ReactDOM.render()` on a node that already has this server-rendered markup, React will preserve it and
-    * only attach event handlers, allowing you to have a very performant first-load experience.
-    */
-  def renderToString(e: VdomElement): String =
-    raw.renderToString(e.rawElement)
-
-  /**
-    * Similar to [[renderToString]], except this doesn't create extra DOM attributes such as `data-react-id`, that React
-    * uses internally. This is useful if you want to use React as a simple static page generator, as stripping away the
-    * extra attributes can save lots of bytes.
-    */
-  def renderToStaticMarkup(e: VdomElement): String =
-    raw.renderToStaticMarkup(e.rawElement)
 }

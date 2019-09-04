@@ -9,16 +9,16 @@ import japgolly.scalajs.react._
  */
 trait OnUnmount {
   private var unmountProcs: List[Callback] = Nil
-  final def unmount: Callback = Callback {
-    unmountProcs foreach (_.runNow())
-    unmountProcs = Nil
-  }
+
+  final def unmount: Callback =
+    Callback.sequence(unmountProcs) >> Callback({unmountProcs = Nil})
+
   final def onUnmount(f: Callback): Callback =
     Callback(unmountProcs ::= f)
 }
 
 object OnUnmount {
-  def install[P, C <: Children, S, B <: OnUnmount]: ScalaComponent.Config[P, C, S, B] =
+  def install[P, C <: Children, S, B <: OnUnmount, U <: UpdateSnapshot]: ScalaComponent.Config[P, C, S, B, U, U] =
     _.componentWillUnmount(_.backend.unmount)
 
   /**
